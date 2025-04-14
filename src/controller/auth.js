@@ -85,7 +85,7 @@ export const login= async (req, res) => {
     }
 // Check if the user exists
     const user = await db.select().from(User).where(sql`${User.email} = ${email}`);
-    if (!user) {
+    if (user.length === 0) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
@@ -101,6 +101,7 @@ export const login= async (req, res) => {
         firstName: user[0].firstName,
         lastName: user[0].lastName,
         email: user[0].email,
+        role: user[0].role,
             },
       process.env.JWT_SECRET,
       {

@@ -1,4 +1,5 @@
-import { integer, pgTable, varchar, pgEnum, serial, time, boolean } from "drizzle-orm/pg-core";
+import { integer, pgTable, varchar, pgEnum, serial, time, boolean, date, doublePrecision, check} from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 // Define the enum types
 export const RoleEnums = pgEnum("role", ["admin","teacher"]);
@@ -60,6 +61,16 @@ export const Grade = pgTable("Grade", {
   GradeName: GradeNameEnum().notNull(), // Use the enum type here
   PricePerHour: integer().notNull(),
 });
+
+export const SeanceTypeCoefficient = pgTable("SeanceTypeCoefficient", {
+  seanceType: varchar("seance_type", { length: 10 }).primaryKey(),
+  value: doublePrecision().notNull().default(1.0),
+}, (table) => ({
+  seanceTypeCheck: check(
+    "seance_type_check",
+    sql`${table.seanceType} IN ('cours', 'td', 'tp')`
+  ),
+}));
 
 export const Seance = pgTable("Seance", {
   id: serial().primaryKey(),

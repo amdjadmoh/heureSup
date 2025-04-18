@@ -2,7 +2,6 @@ import {db} from "../db/index.js";
 import { Teacher } from "../db/schema.js";
 import { Grade } from "../db/schema.js";
 import { sql } from "drizzle-orm";
-import { GradeNameEnum } from "../db/schema.js";
 import { User } from "../db/schema.js";
 import { RoleEnums } from "../db/schema.js";
 import bcrypt from "bcrypt";

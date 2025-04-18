@@ -1,7 +1,6 @@
 const { db } = require("../db/index.js");
 const { Schedule, Seance, User, PromotionEnum, SemesterEnum, SpecialityEnum, DayEnum, SeanceTypeEnum } = require("../db/schema.js");
 const { sql } = require("drizzle-orm");
-const { DateTime } = require("luxon");
 
 exports.createSchedule = async (req, res) => {
   try {
@@ -11,9 +10,9 @@ exports.createSchedule = async (req, res) => {
       return res.status(400).json({ error: "All fields are required" });
     }
 
-    const validPromotions = Object.values(PromotionEnum.enumValues);
-    const validSemesters = Object.values(SemesterEnum.enumValues);
-    const validSpecialities = Object.values(SpecialityEnum.enumValues);
+    const validPromotions = PromotionEnum.enumValues;
+    const validSemesters = SemesterEnum.enumValues;
+    const validSpecialities = SpecialityEnum.enumValues;
 
     if (!validPromotions.includes(promotion)) {
       return res.status(400).json({ error: "Invalid promotion value" });
@@ -98,9 +97,9 @@ exports.updateSchedule = async (req, res) => {
       return res.status(400).json({ error: "All fields are required" });
     }
 
-    const validPromotions = Object.values(PromotionEnum.enumValues);
-    const validSemesters = Object.values(SemesterEnum.enumValues);
-    const validSpecialities = Object.values(SpecialityEnum.enumValues);
+    const validPromotions = PromotionEnum.enumValues;
+    const validSemesters = SemesterEnum.enumValues;
+    const validSpecialities = SpecialityEnum.enumValues;
 
     if (!validPromotions.includes(promotion)) {
       return res.status(400).json({ error: "Invalid promotion value" });
@@ -185,8 +184,8 @@ exports.createSeance = async (req, res) => {
       return res.status(400).json({ error: "All fields are required" });
     }
 
-    const validDays = Object.values(DayEnum.enumValues);
-    const validTypes = Object.values(SeanceypeEnum.enumValues);
+    const validDays = DayEnum.enumValues;
+    const validTypes = SeanceTypeEnum.enumValues;
 
     if (!validDays.includes(day)) {
       return res.status(400).json({ error: "Invalid day value" });
@@ -218,11 +217,11 @@ exports.createSeance = async (req, res) => {
       return res.status(400).json({ error: "Invalid time format (use HH:MM:SS)" });
     }
 
-    if (location.length > 10) {
-      return res.status(400).json({ error: "Location must be 10 characters or less" });
+    if (location.length > 50) {
+      return res.status(400).json({ error: "Location must be 50 characters or less" });
     }
-    if (module.length > 50) {
-      return res.status(400).json({ error: "Module must be 50 characters or less" });
+    if (module.length > 100) {
+      return res.status(400).json({ error: "Module must be 100 characters or less" });
     }
 
     if (!Number.isInteger(Number(group))) {
@@ -239,7 +238,7 @@ exports.createSeance = async (req, res) => {
       group,
       profId,
       scheduleId,
-      isHeurSupp: true, 
+      isHeurSupp: true,
     });
 
     const newSeance = await db
@@ -248,8 +247,6 @@ exports.createSeance = async (req, res) => {
       .where(
         sql`${Seance.day} = ${day} AND ${Seance.startTime} = ${startTime} AND ${Seance.scheduleId} = ${scheduleId} AND ${Seance.profId} = ${profId}`
       );
-
-    await supplementary(newSeance[0]);
 
     return res.status(201).json({ message: "Seance added successfully" });
   } catch (error) {
@@ -325,59 +322,3 @@ exports.deleteSeance = async (req, res) => {
     return res.status(500).json({ error: "Internal server error" });
   }
 };
-
-async function supplementary(seance) {
-  const userId = seance.profId;
-  const barrier = 18;
-  const coef = 1.5;
-  const unit = 2;
-  let total = 0;
-  try {
-    let seances = await db
-      .select()
-      .from(Seance)
-      .where(sql`${Seance.profId} = ${userId}`);
-
-    if (seances.length > 0) {
-      let i = 0;
-      while (
-        i < seances.length &&
-        seances[i].type === "Cours" &&
-        total < barrier
-      ) {
-        const startTime = DateTime.fromSQL(seances[i].startTime, { zone: "utc" });
-        const endTime = DateTime.fromSQL(seances[i].endTime, { zone: "utc" });
-        const durationInHours = calculateDuration(startTime, endTime);
-
-        total += durationInHours * coef * unit;
-        await db
-          .update(Seance)
-          .set({ isHeurSupp: false })
-          .where(sql`${Seance.id} = ${seances[i].id}`);
-        i++;
-      }
-      i = 0;
-      while (i < seances.length && seances[i].type !== "Cours" && total < barrier) {
-        const startTime = DateTime.fromSQL(seances[i].startTime, { zone: "utc" });
-        const endTime = DateTime.fromSQL(seances[i].endTime, { zone: "utc" });
-        const durationInHours = calculateDuration(startTime, endTime);
-
-        total += durationInHours * unit;
-
-        await db
-          .update(Seance)
-          .set({ isHeurSupp: false })
-          .where(sql`${Seance.id} = ${seances[i].id}`);
-        i++;
-      }
-    }
-  } catch (error) {
-    console.error("Error in supplementary:", error);
-  }
-}
-
-function calculateDuration(startTime, endTime) {
-  const diffInMilliseconds = endTime.diff(startTime).milliseconds;
-  const durationInHours = diffInMilliseconds / (1000 * 60 * 60);
-  return parseFloat(durationInHours.toFixed(2));
-}

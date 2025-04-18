@@ -1,4 +1,5 @@
-import { integer, pgTable, varchar, pgEnum, serial, time, boolean } from "drizzle-orm/pg-core";
+import { integer, pgTable, varchar, pgEnum, serial, time, boolean, date, doublePrecision, check} from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 // Define the enum types
 export const RoleEnums = pgEnum("role", ["admin","teacher"]);
@@ -36,6 +37,7 @@ export const SpecialityEnum = pgEnum("speciality", [
   "INFO"
 ]);
 
+// Define the tables
 export const User = pgTable("User", {
   id: serial().primaryKey(),
   firstName: varchar( { length: 256 }).notNull(),
@@ -59,6 +61,16 @@ export const Grade = pgTable("Grade", {
   GradeName: GradeNameEnum().notNull(), // Use the enum type here
   PricePerHour: integer().notNull(),
 });
+
+export const SeanceTypeCoefficient = pgTable("SeanceTypeCoefficient", {
+  seanceType: varchar("seance_type", { length: 10 }).primaryKey(),
+  value: doublePrecision().notNull().default(1.0),
+}, (table) => ({
+  seanceTypeCheck: check(
+    "seance_type_check",
+    sql`${table.seanceType} IN ('cours', 'td', 'tp')`
+  ),
+}));
 
 export const Seance = pgTable("Seance", {
   id: serial().primaryKey(),
@@ -85,4 +97,24 @@ export const Schedule = pgTable("Schedule", {
   promotion: PromotionEnum().notNull(),
   semester: SemesterEnum().notNull(),
   speciality: SpecialityEnum().notNull(),
+});
+
+export const Absence = pgTable("Absence", {
+  id: serial().primaryKey(),
+  date: date().notNull(),
+  seanceId: integer()
+    .references(() => Seance.id, { onUpdate: "cascade", onDelete: "cascade" })
+    .notNull(),
+  teacherId: integer()
+    .references(() => Teacher.id, { onUpdate: "cascade", onDelete: "cascade" })
+    .notNull(),
+});
+
+export const Sessions = pgTable("Sessions", {
+  id: serial().primaryKey(),
+  startDate: date().notNull(),
+  finishDate: date().notNull(),
+  scheduleId: integer()
+    .references(() => Schedule.id, { onUpdate: "cascade", onDelete: "cascade" })
+    .notNull(),
 });

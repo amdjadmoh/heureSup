@@ -5,14 +5,11 @@ import { sql } from "drizzle-orm";
 
 export const createGrade = async (req, res) => {
     try {
-        const { gradeName, pricePerHour } = req.body;
+        const { gradeName, pricePerHour, charge } = req.body;
     
-        if (!gradeName || !pricePerHour) {
+        if (!gradeName || !pricePerHour || !charge) {
         return res.status(400).json({ error: "All fields are required" });
         }
-    
-      
-    
         // Check if the grade already exists
         const existingGrade = await db.select().from(Grade).where(sql`${Grade.GradeName} = ${gradeName}`);
         if (existingGrade.length > 0) {
@@ -23,6 +20,7 @@ export const createGrade = async (req, res) => {
         await db.insert(Grade).values({
         GradeName: gradeName,
         PricePerHour: pricePerHour,
+        charge: charge,
         });
     
         return res.status(201).json({ message: "Grade created successfully" });
@@ -44,9 +42,9 @@ export const getGrades = async (req, res) => {
 
 export const updateGrade = async (req, res) => {
     try {
-        const { id, gradeName, pricePerHour } = req.body;
+        const { id, gradeName, pricePerHour, charge } = req.body;
     
-        if (!id || !gradeName || !pricePerHour) {
+        if (!id || !gradeName || !pricePerHour || !charge) {
         return res.status(400).json({ error: "All fields are required" });
         }
 
@@ -63,6 +61,7 @@ export const updateGrade = async (req, res) => {
         await db.update(Grade).set({
         GradeName: gradeName,
         PricePerHour: pricePerHour,
+        charge: charge,
         }).where(sql`${Grade.id} = ${id}`);
     
         return res.status(200).json({ message: "Grade updated successfully" });

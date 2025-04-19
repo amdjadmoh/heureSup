@@ -35,13 +35,14 @@ export const Teacher= pgTable("Teacher",{
       .references(()=>User.id,{onUpdate:"cascade",onDelete:"cascade"}),
   gradeId: integer()
     .references(() => Grade.id, { onUpdate: "cascade", onDelete: "cascade" })
-    .notNull(),
+    .notNull()
 })
 
 export const Grade = pgTable("Grade", {
   id: serial().primaryKey(),
   GradeName: varchar().notNull(), 
   PricePerHour: integer().notNull(),
+  charge: doublePrecision().notNull(),  
 });
 
 export const SeanceTypeCoefficient = pgTable("SeanceTypeCoefficient", {
@@ -67,9 +68,8 @@ export const Seance = pgTable("Seance", {
   teacherId: integer()
     .references(() => Teacher.id, { onUpdate: "cascade", onDelete: "cascade" })
     .notNull(),
-
-  scheduleId: integer()
-    .references(() => Schedule.id, { onUpdate: "cascade", onDelete: "cascade" })
+scheduleSessionId   : integer()
+    .references(() => ScheduleSession.id, { onUpdate: "cascade", onDelete: "cascade" })
     .notNull(),
 });
 export const Speciality = pgTable("Speciality", {
@@ -89,7 +89,7 @@ export const Promotion = pgTable("Promotion", {
 export const Schedule = pgTable("Schedule", {
   id: serial().primaryKey(),
   semester: SemesterEnum().notNull(),
-  PromotionId: integer()
+  promotionId: integer()
     .references(() => Promotion.id, { onUpdate: "cascade", onDelete: "cascade" })
     .notNull(),
   educationalYear: varchar().notNull()
@@ -112,6 +112,7 @@ export const Holiday = pgTable("Holiday", {
   endDate: date().notNull(),
 });
 
+
 export const GradeSession = pgTable("Sessions", {
   id: serial().primaryKey(),
   startDate: date().notNull(),
@@ -128,13 +129,13 @@ export const ScheduleSession = pgTable("ScheduleSession", {
   startDate: date().notNull(),
   finishDate: date()
 });
-export const heureSup = pgTable("HeureSup", {
+
+export const HeureSup = pgTable("HeureSup", {
   id: serial().primaryKey(),
   scheduleSessionId: integer()
     .references(() => ScheduleSession.id, { onUpdate: "cascade", onDelete: "cascade" }  )
     .notNull(),
-  startTime: time("start_time").notNull(),
-  endTime: time("end_time").notNull(),
+  duration: doublePrecision().notNull(),
   seanceId: integer()
     .references(() => Seance.id, { onUpdate: "cascade", onDelete: "cascade" })
     .notNull(),
@@ -142,3 +143,5 @@ export const heureSup = pgTable("HeureSup", {
     .references(() => Teacher.id, { onUpdate: "cascade", onDelete: "cascade" })
     .notNull(),
 });
+
+

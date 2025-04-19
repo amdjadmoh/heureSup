@@ -110,7 +110,9 @@ export const login= async (req, res) => {
     );
 
     return res.status(200).cookie("access_token", token, { maxAge: 30 * 24 * 60 * 60 * 1000, })
-      .json({ message: "Login successful" });
+      .json({ message: "Login successful" ,
+      user: { id: user[0].id, firstName: user[0].firstName, lastName: user[0].lastName, email: user[0].email, role: user[0].role  }
+  });
   } catch (error) {
     console.error("Error logging in user:", error);
     return res.status(500).json({ error: "Internal server error" });

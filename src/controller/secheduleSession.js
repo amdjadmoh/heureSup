@@ -166,3 +166,114 @@ export const createScheduleSession = async (req, res) => {
     }
 }
 
+export const getScheduleSession = async (req, res) => {
+    try {
+        const { scheduleId } = req.params;
+        if (!scheduleId) {
+            return res.status(400).json({ error: "All fields are required" });
+        }
+        // Get all schedule sessions for the given schedule ID
+        const scheduleSessions = await db.select().from(ScheduleSession).where(sql`${ScheduleSession.scheduleId} = ${scheduleId}`);
+        if (scheduleSessions.length === 0) {
+            return res.status(404).json({ message: "No schedule sessions found" });
+        }
+        return res.status(200).json(scheduleSessions);
+    } catch (error) {
+        console.error("Error fetching schedule sessions:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+}
+export const deleteScheduleSession = async (req, res) => {
+    try {
+        const { scheduleSessionId } = req.params;
+        if (!scheduleSessionId) {
+            return res.status(400).json({ error: "All fields are required" });
+        }
+        // Delete the schedule session
+        await db.delete(ScheduleSession).where(sql`${ScheduleSession.id} = ${scheduleSessionId}`);
+        // Delete the corresponding heuresup
+        await db.delete(HeureSup).where(sql`${HeureSup.scheduleSessionId} = ${scheduleSessionId}`);
+        // Delete the corresponding seances
+        await db.delete(Seance).where(sql`${Seance.scheduleId} = ${scheduleSessionId}`);
+        return res.status(200).json({ message: "Schedule session deleted successfully" });
+    } catch (error) {
+        console.error("Error deleting schedule session:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+}
+
+export const updateScheduleSession = async (req, res) => {
+    try {
+        const { scheduleSessionId } = req.paradms;
+        const { startDate, endDate } = req.query;
+        if (!scheduleSessionId || !startDate || !endDate) {
+            return res.status(400).json({ error: "All fields are required" });
+        }
+        // Update the schedule session
+        await db.update(ScheduleSession).set({
+            startDate: startDate,
+            endDate: endDate,
+        }).where(sql`${ScheduleSession.id} = ${scheduleSessionId}`);
+        return res.status(200).json({ message: "Schedule session updated successfully" });
+    } catch (error) {
+        console.error("Error updating schedule session:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+}
+
+export const getScheduleSessionById = async (req, res) => {
+    try {
+        const { scheduleSessionId } = req.params;
+        if (!scheduleSessionId) {
+            return res.status(400).json({ error: "All fields are required" });
+        }
+        // Get the schedule session by ID
+        const scheduleSession = await db.select().from(ScheduleSession).where(sql`${ScheduleSession.id} = ${scheduleSessionId}`);
+        if (scheduleSession.length === 0) {
+            return res.status(404).json({ message: "No schedule session found" });
+        }
+        return res.status(200).json(scheduleSession[0]);
+    } catch (error) {
+        console.error("Error fetching schedule session:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+}
+
+export const getScheduleSessionByScheduleId = async (req, res) => {
+    try {
+        const { scheduleId } = req.params;
+        if (!scheduleId) {
+            return res.status(400).json({ error: "All fields are required" });
+        }
+        // Get the schedule session by ID
+        const scheduleSession = await db.select().from(ScheduleSession).where(sql`${ScheduleSession.scheduleId} = ${scheduleId}`);
+        if (scheduleSession.length === 0) {
+            return res.status(404).json({ message: "No schedule session found" });
+        }
+        return res.status(200).json(scheduleSession[0]);
+    } catch (error) {
+        console.error("Error fetching schedule session:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+}
+
+export const getSeancesByScheduleSessionId = async (req, res) => {
+    try {
+        const { scheduleSessionId } = req.params;
+        if (!scheduleSessionId) {
+            return res.status(400).json({ error: "All fields are required" });
+        }
+        // Get the seances by schedule session ID
+        const seances = await db.select().from(Seance).where(sql`${Seance.scheduleSessionId} = ${scheduleSessionId}`);
+        if (seances.length === 0) {
+            return res.status(404).json({ message: "No seances found" });
+        }
+        return res.status(200).json(seances);
+    } catch (error) {
+        console.error("Error fetching seances:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+}
+
+
+

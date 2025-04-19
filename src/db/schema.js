@@ -68,9 +68,8 @@ export const Seance = pgTable("Seance", {
   teacherId: integer()
     .references(() => Teacher.id, { onUpdate: "cascade", onDelete: "cascade" })
     .notNull(),
-
-  scheduleId: integer()
-    .references(() => Schedule.id, { onUpdate: "cascade", onDelete: "cascade" })
+scheduleSessionId   : integer()
+    .references(() => ScheduleSession.id, { onUpdate: "cascade", onDelete: "cascade" })
     .notNull(),
 });
 export const Speciality = pgTable("Speciality", {

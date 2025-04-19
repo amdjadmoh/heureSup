@@ -1,5 +1,5 @@
 const { db } = require("../db/index.js");
-const { Schedule, Seance, User, SemesterEnum, DayEnum, SeanceTypeEnum,Promotion,Speciality , Teacher} = require("../db/schema.js");
+const { Schedule, Seance, User, SemesterEnum, DayEnum, SeanceTypeEnum,Promotion,Speciality , Teacher,ScheduleSession} = require("../db/schema.js");
 const { sql } = require("drizzle-orm");
 
 exports.createSchedule = async (req, res) => {
@@ -260,9 +260,9 @@ exports.deleteSchedule = async (req, res) => {
 exports.createSeance = async (req, res) => {
   try {
     const { day, startTime, endTime, location, type, module, group, teacherId } = req.body;
-    const scheduleId = req.params.id;
+    const  scheduleSessionId = req.params.id;
 
-    if (!day || !startTime || !endTime || !location || !type || !module || !group || !teacherId  || !scheduleId) {
+    if (!day || !startTime || !endTime || !location || !type || !module || !group || !teacherId  || ! cheduleSessionId) {
 
       return res.status(400).json({ error: "All fields are required" });
     }
@@ -277,13 +277,12 @@ exports.createSeance = async (req, res) => {
       return res.status(400).json({ error: "Invalid type value" });
     }
 
-    const schedule = await db
+    const ScheduleSession = await db
       .select()
-      .from(Schedule)
-      .where(sql`${Schedule.id} = ${scheduleId}`);
-
-    if (schedule.length === 0) {
-      return res.status(404).json({ error: "Schedule not found" });
+      .from(ScheduleSession)
+      .where(sql`${ScheduleSession.id} = ${scheduleSessionId}`);
+    if (ScheduleSession.length === 0) {
+      return res.status(404).json({ error: "ScheduleSession not found" });
     }
 
     const teacher = await db
@@ -320,7 +319,7 @@ exports.createSeance = async (req, res) => {
       module,
       group,
       teacherId,
-      scheduleId,
+      scheduleSessionId,
       isHeurSupp: true,
     });
 
@@ -328,7 +327,7 @@ exports.createSeance = async (req, res) => {
       .select()
       .from(Seance)
       .where(
-        sql`${Seance.day} = ${day} AND ${Seance.startTime} = ${startTime} AND ${Seance.scheduleId} = ${scheduleId} AND ${Seance.teacherId} = ${teacherId}`
+        sql`${Seance.day} = ${day} AND ${Seance.startTime} = ${startTime} AND ${Seance. scheduleSessionId} = ${ scheduleSessionId} AND ${Seance.teacherId} = ${teacherId}`
       );
 
     return res.status(201).json({ message: "Seance added successfully" });
@@ -340,26 +339,28 @@ exports.createSeance = async (req, res) => {
 
 exports.getSeances = async (req, res) => {
   try {
-    const { scheduleId } = req.params;
+    const {  scheduleSessionId } = req.params;
 
-    if (!scheduleId) {
+    if (! scheduleSessionId) {
       return res.status(400).json({ error: "Schedule ID is required" });
     }
 
-    const schedule = await db
+    const scheduleSession = await db
       .select()
-      .from(Schedule)
-      .where(sql`${Schedule.id} = ${scheduleId}`);
+      .from(ScheduleSession)
+      .where(sql`${ScheduleSession.id} = ${scheduleSessionId}`);#
 
-    if (schedule.length === 0) {
+    if (scheduleSession.length === 0) {
       return res.status(404).json({ error: "Schedule not found" });
     }
+
+
 
     const seances = await db
       .select()
       .from(Seance)
       .innerJoin(User, sql`${Seance.teacherId} = ${User.id}`)
-      .where(sql`${Seance.scheduleId} = ${scheduleId}`);
+      .where(sql`${Seance.scheduleSessionId} = ${scheduleSessionId}`);
 
     return res.status(200).json({ seances });
   } catch (error) {

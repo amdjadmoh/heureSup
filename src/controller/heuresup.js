@@ -1,48 +1,48 @@
 import { HeureSup,ScheduleSession ,Schedule, Teacher, Seance,Grade, SeanceTypeCoefficient} from "../db/schema.js";   
 import { db } from "../db/index.js";
 import { sql,inArray ,eq} from "drizzle-orm" 
-export const getScheduleOfTeacher = async function (req, res) {
-    const { teacherId } = req.params;
-    try {
-        // Check if the teacher exists
-        const teacher = await db.select().from(Teacher).where(sql`${Teacher.id} = ${teacherId}`);
-        if (teacher.length === 0) {
-            return res.status(404).json({ message: "Teacher not found" });
-        }
+// export const getScheduleOfTeacher = async function (req, res) {
+//     const { teacherId } = req.params;
+//     try {
+//         // Check if the teacher exists
+//         const teacher = await db.select().from(Teacher).where(sql`${Teacher.id} = ${teacherId}`);
+//         if (teacher.length === 0) {
+//             return res.status(404).json({ message: "Teacher not found" });
+//         }
 
-        // Get all seances for the teacher
-        const seances = await db.select().from(Seance).where(sql`${Seance.teacherId} = ${teacherId}`);
-        if (seances.length === 0) {
-            return res.status(404).json({ message: "No seances found for this teacher" });
-        }
-        // Mark the suplemntary seances
-        const heuresup = await db.select().from(HeureSup).where(sql`${HeureSup.teacherId} = ${teacherId}`);
-        // get scheduleSession ids from heuresup
-        const sessionIds = heuresup.map(heure => heure.scheduleSessionId);
-        // Get all schedule sessions for the teacher
-        const scheduleSessions = await db.select().from(ScheduleSession).where(inArray(ScheduleSession.id, sessionIds));
-        // if there are multiple schedule sessions with the same scheduleId, keep only the latest one
-        const scheduleSessionIds = scheduleSessions.map(session => session.scheduleId);
-        const scheduleSessionsMap = new Map();
-        scheduleSessions.forEach(session => {
-            if (!scheduleSessionsMap.has(session.scheduleId)) {
-                scheduleSessionsMap.set(session.scheduleId, session);
-            } else {
-                const existingSession = scheduleSessionsMap.get(session.scheduleId);
-                if (new Date(session.startDate) > new Date(existingSession.startDate)) {
-                    scheduleSessionsMap.set(session.scheduleId, session);
-                }
-            }
-        });
-        // keep heuresup that have scheduleSessionId in scheduleSessionsMap
-        const filteredHeuresup = heuresup.filter(heure => scheduleSessionsMap.has(heure.scheduleSessionId));
-        console.log(filteredHeuresup);
-        return res.status(200).json(scheduleSessions);
-    } catch (error) {
-        console.error("Error fetching schedule sessions:", error);
-        return res.status(500).json({ message: "Internal server error" });
-    }
-}
+//         // Get all seances for the teacher
+//         const seances = await db.select().from(Seance).where(sql`${Seance.teacherId} = ${teacherId}`);
+//         if (seances.length === 0) {
+//             return res.status(404).json({ message: "No seances found for this teacher" });
+//         }
+//         // Mark the suplemntary seances
+//         const heuresup = await db.select().from(HeureSup).where(sql`${HeureSup.teacherId} = ${teacherId}`);
+//         // get scheduleSession ids from heuresup
+//         const sessionIds = heuresup.map(heure => heure.scheduleSessionId);
+//         // Get all schedule sessions for the teacher
+//         const scheduleSessions = await db.select().from(ScheduleSession).where(inArray(ScheduleSession.id, sessionIds));
+//         // if there are multiple schedule sessions with the same scheduleId, keep only the latest one
+//         const scheduleSessionIds = scheduleSessions.map(session => session.scheduleId);
+//         const scheduleSessionsMap = new Map();
+//         scheduleSessions.forEach(session => {
+//             if (!scheduleSessionsMap.has(session.scheduleId)) {
+//                 scheduleSessionsMap.set(session.scheduleId, session);
+//             } else {
+//                 const existingSession = scheduleSessionsMap.get(session.scheduleId);
+//                 if (new Date(session.startDate) > new Date(existingSession.startDate)) {
+//                     scheduleSessionsMap.set(session.scheduleId, session);
+//                 }
+//             }
+//         });
+//         // keep heuresup that have scheduleSessionId in scheduleSessionsMap
+//         const filteredHeuresup = heuresup.filter(heure => scheduleSessionsMap.has(heure.scheduleSessionId));
+//         console.log(filteredHeuresup);
+//         return res.status(200).json(scheduleSessions);
+//     } catch (error) {
+//         console.error("Error fetching schedule sessions:", error);
+//         return res.status(500).json({ message: "Internal server error" });
+//     }
+// }
 
 // export const get = async function (req, res) {
 //     const { teacherId } = req.params;

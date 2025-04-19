@@ -95,4 +95,3 @@ export const deleteGrade = async (req, res) => {
     }
 }
 
-

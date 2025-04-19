@@ -106,6 +106,13 @@ export const Absence = pgTable("Absence", {
     .notNull(),
 });
 
+export const Holiday = pgTable("Holiday", {
+  id: serial().primaryKey(),
+  startDate: date().notNull(),
+  endDate: date().notNull(),
+});
+
+
 export const GradeSession = pgTable("Sessions", {
   id: serial().primaryKey(),
   startDate: date().notNull(),
@@ -122,6 +129,7 @@ export const ScheduleSession = pgTable("ScheduleSession", {
   startDate: date().notNull(),
   finishDate: date()
 });
+
 export const HeureSup = pgTable("HeureSup", {
   id: serial().primaryKey(),
   scheduleSessionId: integer()
@@ -135,4 +143,5 @@ export const HeureSup = pgTable("HeureSup", {
     .references(() => Teacher.id, { onUpdate: "cascade", onDelete: "cascade" })
     .notNull(),
 });
+
 

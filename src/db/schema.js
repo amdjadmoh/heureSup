@@ -4,14 +4,6 @@ import { sql } from "drizzle-orm";
 // Define the enum types
 export const RoleEnums = pgEnum("role", ["admin","teacher"]);
 
-export const GradeNameEnum = pgEnum("grade_name", [
-  "Professeur",
-  "Enseignant",
-  "Assistant Master A",
-  "Assistant Master B",
-  "Lecturer A",
-  "Lecturer B",
-]);
 
 export const DayEnum = pgEnum("day", [
   "sunday",
@@ -24,18 +16,8 @@ export const DayEnum = pgEnum("day", [
 ]);
 
 export const SeanceTypeEnum = pgEnum("seance_type", ["cours", "td", "tp"]);
-
-export const PromotionEnum = pgEnum("promotion", ["1CPI", "2CPI", "1CS", "2CS", "3CS"]);
-
 export const SemesterEnum = pgEnum("semester", ["S1", "S2"]);
 
-export const SpecialityEnum = pgEnum("speciality", [
-  "SIW",
-  "ISI",
-  "AIDS",
-  "MI",
-  "INFO"
-]);
 
 // Define the tables
 export const User = pgTable("User", {
@@ -58,7 +40,7 @@ export const Teacher= pgTable("Teacher",{
 
 export const Grade = pgTable("Grade", {
   id: serial().primaryKey(),
-  GradeName: GradeNameEnum().notNull(), // Use the enum type here
+  GradeName: varchar().notNull(), 
   PricePerHour: integer().notNull(),
 });
 
@@ -74,7 +56,6 @@ export const SeanceTypeCoefficient = pgTable("SeanceTypeCoefficient", {
 
 export const Seance = pgTable("Seance", {
   id: serial().primaryKey(),
-  isHeurSupp: boolean().default(true).notNull(),
   day: DayEnum().notNull(),
   startTime: time("start_time").notNull(),
   endTime: time("end_time").notNull(),
@@ -91,12 +72,27 @@ export const Seance = pgTable("Seance", {
     .references(() => Schedule.id, { onUpdate: "cascade", onDelete: "cascade" })
     .notNull(),
 });
+export const Speciality = pgTable("Speciality", {
+  id: serial().primaryKey(),
+  name: varchar("name", { length: 50 }).notNull()
+});
+
+
+export const Promotion = pgTable("Promotion", {
+  id: serial().primaryKey(),
+  name: varchar("name", { length: 50 }).notNull(),
+  specialityId : integer()
+    .references(() => Speciality.id, { onUpdate: "cascade", onDelete: "cascade" })
+});
+
 
 export const Schedule = pgTable("Schedule", {
   id: serial().primaryKey(),
-  promotion: PromotionEnum().notNull(),
   semester: SemesterEnum().notNull(),
-  speciality: SpecialityEnum().notNull(),
+  PromotionId: integer()
+    .references(() => Promotion.id, { onUpdate: "cascade", onDelete: "cascade" })
+    .notNull(),
+  educationalYear: varchar().notNull()
 });
 
 export const Absence = pgTable("Absence", {
@@ -110,11 +106,33 @@ export const Absence = pgTable("Absence", {
     .notNull(),
 });
 
-export const Sessions = pgTable("Sessions", {
+export const GradeSession = pgTable("Sessions", {
   id: serial().primaryKey(),
   startDate: date().notNull(),
-  finishDate: date().notNull(),
+  finishDate: date(),
+  teacherId: integer()
+    .references(() => Teacher.id, { onUpdate: "cascade", onDelete: "cascade" })
+    .notNull(),
+});
+export const ScheduleSession = pgTable("ScheduleSession", {
+  id: serial().primaryKey(),
   scheduleId: integer()
     .references(() => Schedule.id, { onUpdate: "cascade", onDelete: "cascade" })
+    .notNull(),
+  startDate: date().notNull(),
+  finishDate: date()
+});
+export const heureSup = pgTable("HeureSup", {
+  id: serial().primaryKey(),
+  scheduleSessionId: integer()
+    .references(() => ScheduleSession.id, { onUpdate: "cascade", onDelete: "cascade" }  )
+    .notNull(),
+  startTime: time("start_time").notNull(),
+  endTime: time("end_time").notNull(),
+  seanceId: integer()
+    .references(() => Seance.id, { onUpdate: "cascade", onDelete: "cascade" })
+    .notNull(),
+  teacherId: integer()
+    .references(() => Teacher.id, { onUpdate: "cascade", onDelete: "cascade" })
     .notNull(),
 });

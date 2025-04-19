@@ -1,7 +1,6 @@
 import {db} from "../db/index.js";
 import { Grade } from "../db/schema.js";
 import { sql } from "drizzle-orm";
-import { GradeNameEnum } from "../db/schema.js";
 
 
 export const createGrade = async (req, res) => {
@@ -11,11 +10,8 @@ export const createGrade = async (req, res) => {
         if (!gradeName || !pricePerHour) {
         return res.status(400).json({ error: "All fields are required" });
         }
-        // check if the grade name is valid
-        const validGradeNames = Object.values(GradeNameEnum.enumValues);
-        if (!validGradeNames.includes(gradeName)) {
-        return res.status(400).json({ error: "Invalid grade name" });
-        }
+    
+      
     
         // Check if the grade already exists
         const existingGrade = await db.select().from(Grade).where(sql`${Grade.GradeName} = ${gradeName}`);
@@ -54,11 +50,7 @@ export const updateGrade = async (req, res) => {
         return res.status(400).json({ error: "All fields are required" });
         }
 
-        // check if the grade name is valid
-        const validGradeNames = Object.values(GradeNameEnum.enumValues);
-        if (!validGradeNames.includes(gradeName)) {
-        return res.status(400).json({ error: "Invalid grade name" });
-        }
+     
         
     
         // Check if the grade exists
@@ -103,5 +95,4 @@ export const deleteGrade = async (req, res) => {
         return res.status(500).json({ error: "Internal server error" });
     }
 }
-
 

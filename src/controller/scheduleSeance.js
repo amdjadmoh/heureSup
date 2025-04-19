@@ -1,34 +1,46 @@
 const { db } = require("../db/index.js");
-const { Schedule, Seance, User, PromotionEnum, SemesterEnum, SpecialityEnum, DayEnum, SeanceTypeEnum } = require("../db/schema.js");
+const { Schedule, Seance, User, SemesterEnum, DayEnum, SeanceTypeEnum,Promotion,Speciality } = require("../db/schema.js");
 const { sql } = require("drizzle-orm");
 
 exports.createSchedule = async (req, res) => {
   try {
-    const { promotion, semester, speciality } = req.body;
+    const { promotionId, semester, specialityId,educationalYear} = req.body;
 
-    if (!promotion || !semester || !speciality) {
+    if (!promotionId || !semester || !specialityId || !educationalYear) {
       return res.status(400).json({ error: "All fields are required" });
     }
 
-    const validPromotions = PromotionEnum.enumValues;
+  // check educationalYear format 2025/2024
+    const yearRegex = /^\d{4}\/\d{4}$/;
+    if (!yearRegex.test(educationalYear)) {
+      return res.status(400).json({ error: "Invalid educational year format (use YYYY/YYYY)" });
+    }
+   
     const validSemesters = SemesterEnum.enumValues;
-    const validSpecialities = SpecialityEnum.enumValues;
 
-    if (!validPromotions.includes(promotion)) {
-      return res.status(400).json({ error: "Invalid promotion value" });
-    }
-    if (!validSemesters.includes(semester)) {
-      return res.status(400).json({ error: "Invalid semester value" });
-    }
     if (!validSpecialities.includes(speciality)) {
       return res.status(400).json({ error: "Invalid speciality value" });
     }
+    // check promotionId and semesterId are valid
+    const promotion = await db
+      .select()
+      .from(Promotion)
+      .where(sql`${Promotion.id} = ${promotionId}`);
+    if (promotion.length === 0) {
+      return res.status(400).json({ error: "Invalid promotion value" });
+    }
+    const Speciality = await db.select().from(Speciality).where(sql`${Speciality.id} = ${specialityId}`);
+    if (Speciality.length === 0) {
+      return res.status(400).json({ error: "Invalid speciality value" });
+    }
+
+    // check if the schedule already exists
 
     const existingSchedule = await db
       .select()
       .from(Schedule)
       .where(
-        sql`${Schedule.promotion} = ${promotion} AND ${Schedule.semester} = ${semester} AND ${Schedule.speciality} = ${speciality}`
+        sql`${Schedule.promotionId} = ${promotionId} AND ${Schedule.semester} = ${semester} AND ${Schedule.specialityId} = ${specialityId} AND ${Schedule.educationalYear} = ${educationalYear}`
       );
 
     if (existingSchedule.length > 0) {
@@ -36,17 +48,15 @@ exports.createSchedule = async (req, res) => {
     }
 
     await db.insert(Schedule).values({
-      promotion,
+      promotionId,
       semester,
-      speciality,
+      specialityId,
+      educationalYear,
     });
 
-    const newSchedule = await db
-      .select()
-      .from(Schedule)
-      .where(
-        sql`${Schedule.promotion} = ${promotion} AND ${Schedule.semester} = ${semester} AND ${Schedule.speciality} = ${speciality}`
-      );
+    const newSchedule = await db.select().from(Schedule).where(
+      sql`${Schedule.promotionId} = ${promotionId} AND ${Schedule.semester} = ${semester} AND ${Schedule.specialityId} = ${specialityId} AND ${Schedule.educationalYear} = ${educationalYear}`
+    );
 
     return res.status(201).json({ schedule: newSchedule[0] });
   } catch (error) {
@@ -91,56 +101,71 @@ exports.getScheduleById = async (req, res) => {
 
 exports.updateSchedule = async (req, res) => {
   try {
-    const { id, promotion, semester, speciality } = req.body;
+    const { id } = req.params;
+    const { promotionId, semester, specialityId,educationalYear } = req.body;
 
-    if (!id || !promotion || !semester || !speciality) {
+    if (!id) {
+      return res.status(400).json({ error: "ID is required" });
+    }
+    if (!promotionId || !semester || !specialityId || !educationalYear) {
       return res.status(400).json({ error: "All fields are required" });
+
     }
 
-    const validPromotions = PromotionEnum.enumValues;
+    // check educationalYear format 2025/2024
+    const yearRegex = /^\d{4}\/\d{4}$/;
+    if (!yearRegex.test(educationalYear)) {
+      return res.status(400).json({ error: "Invalid educational year format (use YYYY/YYYY)" });
+
+    }
     const validSemesters = SemesterEnum.enumValues;
-    const validSpecialities = SpecialityEnum.enumValues;
 
-    if (!validPromotions.includes(promotion)) {
-      return res.status(400).json({ error: "Invalid promotion value" });
-    }
+
     if (!validSemesters.includes(semester)) {
+
       return res.status(400).json({ error: "Invalid semester value" });
     }
-    if (!validSpecialities.includes(speciality)) {
-      return res.status(400).json({ error: "Invalid speciality value" });
+  // check promotionId and semesterId are valid
+    const promotion = await db
+      .select()
+      .from(Promotion)
+      .where(sql`${Promotion.id} = ${promotionId}`);
+
+    if (promotion.length === 0) {
+      return res.status(400).json({ error: "Invalid promotion " });
+    }
+    const Speciality = await db.select().from(Speciality).where(sql`${Speciality.id} = ${specialityId}`);
+    if (Speciality.length === 0) {
+      return res.status(400).json({ error: "Invalid speciality " });
     }
 
+    // check if the schedule already exists
     const existingSchedule = await db
-      .select()
-      .from(Schedule)
-      .where(sql`${Schedule.id} = ${id}`);
-
-    if (existingSchedule.length === 0) {
-      return res.status(404).json({ error: "Schedule not found" });
-    }
-
-    const duplicateSchedule = await db
-      .select()
+      .select()     
       .from(Schedule)
       .where(
-        sql`${Schedule.promotion} = ${promotion} AND ${Schedule.semester} = ${semester} AND ${Schedule.speciality} = ${speciality} AND ${Schedule.id} != ${id}`
+        sql`${Schedule.promotionId} = ${promotionId} AND ${Schedule.semester} = ${semester} AND ${Schedule.specialityId} = ${specialityId} AND ${Schedule.educationalYear} = ${educationalYear}`
       );
-
-    if (duplicateSchedule.length > 0) {
-      return res.status(400).json({ error: "Another schedule with these values already exists" });
+    
+    if (existingSchedule.length > 0) {
+      return res.status(400).json({ error: "Schedule already exists" });
     }
 
-    await db
+    // create the schedule
+    const updateSchedule = await db
       .update(Schedule)
       .set({
-        promotion,
+        promotionId,
         semester,
-        speciality,
+        specialityId,
+        educationalYear,
       })
       .where(sql`${Schedule.id} = ${id}`);
 
-    return res.status(200).json({ message: "Schedule updated successfully" });
+    return res.status(200).json({
+      message: `Schedule with id: '${id}' updated successfully`,
+      schedule: updateSchedule,
+    });
   } catch (error) {
     console.error("Error updating schedule:", error);
     return res.status(500).json({ error: "Internal server error" });

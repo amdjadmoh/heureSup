@@ -106,6 +106,12 @@ export const Absence = pgTable("Absence", {
     .notNull(),
 });
 
+export const Holiday = pgTable("Holiday", {
+  id: serial().primaryKey(),
+  startDate: date().notNull(),
+  endDate: date().notNull(),
+});
+
 export const GradeSession = pgTable("Sessions", {
   id: serial().primaryKey(),
   startDate: date().notNull(),

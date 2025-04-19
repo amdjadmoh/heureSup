@@ -1,7 +1,7 @@
-import { HeureSup,ScheduleSession ,Schedule, Teacher, Seance,Grade, SeanceTypeCoefficient} from "../db/schema.js";    
+import { HeureSup,ScheduleSession ,Schedule, Teacher, Seance,Grade, SeanceTypeCoefficient,User} from "../db/schema.js";    
 
 import { db } from "../db/index.js";
-import { sql } from "drizzle-orm"
+import { sql ,eq} from "drizzle-orm"
 const dayOrder = {
     "sunday": 0,
     "monday": 1, 
@@ -264,7 +264,8 @@ export const getSeancesByScheduleSessionId = async (req, res) => {
             return res.status(400).json({ error: "All fields are required" });
         }
         // Get the seances by schedule session ID
-        const seances = await db.select().from(Seance).where(sql`${Seance.scheduleSessionId} = ${scheduleSessionId}`);
+        const seances = await db.select().from(Seance).innerJoin(User,eq(Seance
+            .teacherId,User.id)).where(sql`${Seance.scheduleSessionId} = ${scheduleSessionId}`);
         if (seances.length === 0) {
             return res.status(404).json({ message: "No seances found" });
         }

@@ -1,6 +1,6 @@
 const { db } = require("../db/index.js");
 const { Schedule, Seance, User, SemesterEnum, DayEnum, SeanceTypeEnum,Promotion,Speciality , Teacher,ScheduleSession} = require("../db/schema.js");
-const { sql } = require("drizzle-orm");
+const { sql ,eq} = require("drizzle-orm");
 
 exports.createSchedule = async (req, res) => {
   try {
@@ -90,7 +90,7 @@ exports.createSchedule = async (req, res) => {
 
 exports.getSchedules = async (req, res) => {
   try {
-    const schedules = await db.select().from(Schedule);
+    const schedules = await db.select().from(Schedule).innerJoin(Promotion,eq(Schedule.promotionId,Promotion.id));
     return res.status(200).json({ schedules });
   } catch (error) {
     console.error("Error fetching schedules:", error);
@@ -262,7 +262,7 @@ exports.createSeance = async (req, res) => {
     const { day, startTime, endTime, location, type, module, group, teacherId } = req.body;
     const  scheduleSessionId = req.params.id;
 
-    if (!day || !startTime || !endTime || !location || !type || !module || !group || !teacherId  || ! cheduleSessionId) {
+    if (!day || !startTime || !endTime || !location || !type || !module || !group || !teacherId  || ! scheduleSessionId) {
 
       return res.status(400).json({ error: "All fields are required" });
     }
@@ -277,11 +277,11 @@ exports.createSeance = async (req, res) => {
       return res.status(400).json({ error: "Invalid type value" });
     }
 
-    const ScheduleSession = await db
+    const scheduleSession = await db
       .select()
       .from(ScheduleSession)
       .where(sql`${ScheduleSession.id} = ${scheduleSessionId}`);
-    if (ScheduleSession.length === 0) {
+    if (scheduleSession.length === 0) {
       return res.status(404).json({ error: "ScheduleSession not found" });
     }
 

@@ -348,7 +348,7 @@ exports.getSeances = async (req, res) => {
     const scheduleSession = await db
       .select()
       .from(ScheduleSession)
-      .where(sql`${ScheduleSession.id} = ${scheduleSessionId}`);#
+      .where(sql`${ScheduleSession.id} = ${scheduleSessionId}`);
 
     if (scheduleSession.length === 0) {
       return res.status(404).json({ error: "Schedule not found" });

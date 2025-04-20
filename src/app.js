@@ -32,7 +32,7 @@ app.use('/api/promotion', promotionRouter);
 app.use('/api/seanceTypeCoefficient', seanceTypeCoefficientRouter);
 app.use('/api/absence', absenceRouter)
 app.use('/api/holiday', holidayRouter);
-// app.use('/api/heureSup', heureSupRouter);
+app.use('/api/heureSup', heureSupRouter);
 
 app.use((req, res, next) => {
     res.status(404).send({ error: 'Route not found' });

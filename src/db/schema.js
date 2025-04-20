@@ -1,4 +1,4 @@
-import { integer, pgTable, varchar, pgEnum, serial, time, boolean, date, doublePrecision, check} from "drizzle-orm/pg-core";
+import { integer, pgTable, varchar, pgEnum, serial, time, boolean, date, doublePrecision, check,} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 // Define the enum types
@@ -127,7 +127,8 @@ export const ScheduleSession = pgTable("ScheduleSession", {
     .references(() => Schedule.id, { onUpdate: "cascade", onDelete: "cascade" })
     .notNull(),
   startDate: date().notNull(),
-  finishDate: date()
+  finishDate: date(),
+  closed: boolean().notNull().default(false),
 });
 
 export const HeureSup = pgTable("HeureSup", {

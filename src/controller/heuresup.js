@@ -1,6 +1,105 @@
-import { HeureSup,ScheduleSession ,Schedule, Teacher, Seance,Grade, SeanceTypeCoefficient} from "../db/schema.js";   
+import { HeureSup,ScheduleSession ,Schedule, Teacher, Seance,Grade, SeanceTypeCoefficient,Holiday,Absence} from "../db/schema.js";   
 import { db } from "../db/index.js";
-import { sql,inArray ,eq} from "drizzle-orm" 
+import { sql,inArray ,eq} from "drizzle-orm"
+
+export const getTeacherHeureSupByWeeks = async function (req, res) {
+    const { teacherId } = req.params;
+   let startMonth = parseInt(req.query.startMonth, 10); 
+    const endMonth = parseInt(req.query.endMonth, 10);    
+    const year = parseInt(req.query.year, 10);           
+    try {
+        // Check if the teacher exists
+        const teacher = await db.select().from(Teacher).where(sql`${Teacher.id} = ${teacherId}`);
+        if (teacher.length === 0) {
+            return res.status(404).json({ message: "Teacher not found" });
+        }
+      
+        if (!startMonth|| !endMonth | !year) {
+            return res.status(400).json({ message: "startMonth and endMonth and year are required" });
+        }
+
+        // get all heuresup for the teacher in the given date range
+        const heuresup = await db.select().from(HeureSup)
+        .innerJoin(ScheduleSession,eq(HeureSup.scheduleSessionId,ScheduleSession.id))
+        .innerJoin(Seance,eq(HeureSup.seanceId,Seance.id))
+        .where(sql`${HeureSup.teacherId} = ${teacherId}`);
+        if (heuresup.length === 0) {
+            return res.status(404).json({ message: "No hours found for this teacher" });
+        }
+        // set endDate to current date if it is null
+   
+        heuresup.forEach(heure => {
+            if (heure.ScheduleSession.finishDate === null) {
+                heure.ScheduleSession.finishDate = new Date();
+            }
+        });
+
+        // make array of object months from startDate to endDate each month contains objects of weeks
+        const months = [];
+        // get start month number and end month number#
+        while (startMonth <= endMonth) {
+            const monthObject = {
+                month: startMonth,
+                weeks: []
+            };
+            const monthDaysNumber = new Date(year, startMonth, 0).getDate(); // Get the number of days in the month
+            let startDay=1;
+            let weekIndex = 1;
+            while (startDay <= monthDaysNumber) {
+                const date = new Date(year, startMonth - 1, startDay);
+                const dayIndex = date.getDay();
+                let heuresupHours= 0;
+                // get heure sup hours of that day
+                const heuresupOfDay = heuresup.filter(heure => {
+                    const sessionStartDate = new Date(heure.ScheduleSession.startDate);
+                    const sessionEndDate = new Date(heure.ScheduleSession.finishDate);
+                    const seanceDay= heure.Seance.day;
+                    // convert seanceDay to number in english format
+                    const seanceDayNumber = seanceDay === "monday" ? 1 : seanceDay === "tuesday" ? 2 : seanceDay === "wednesday" ? 3 : seanceDay === "thursday" ? 4 : seanceDay === "friday" ? 5 : seanceDay === "saturday" ? 6 : 0;
+                    const datetoCheck = new Date(year, startMonth - 1, startDay);
+                    return dayIndex === seanceDayNumber && datetoCheck >= sessionStartDate && datetoCheck <= sessionEndDate;
+                });
+                heuresupOfDay.forEach(heure => {
+                    heuresupHours += heure.HeureSup.duration || 0;
+                });
+                // check if week already exists
+                const existingWeek = monthObject.weeks.find(week => week.week === weekIndex);
+                if (existingWeek) {
+                    existingWeek.heuresupHours += heuresupHours;
+                } else {
+                monthObject.weeks.push({
+                    week:weekIndex,
+                    heuresupHours: heuresupHours
+                });
+            }
+                startDay++;
+                // check if week ended 
+                if (dayIndex === 5 || startDay > monthDaysNumber) {
+                    weekIndex++;
+                }
+
+            }
+            months.push(monthObject);
+            startMonth++;
+        }
+    
+        // return the months array with weeks and heuresup hours
+        return res.status(200).json(months);
+
+      
+    } catch (error) {
+        console.error("Error fetching teacher hours:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+}
+
+
+    
+        
+    
+
+      
+
 // export const getScheduleOfTeacher = async function (req, res) {
 //     const { teacherId } = req.params;
 //     try {

@@ -15,6 +15,7 @@ router.get("/sessions/:scheduleSessionId", secheduleSessionController.getSchedul
 router.put("/sessions/:scheduleSessionId", secheduleSessionController.updateScheduleSession);
 router.delete("/sessions/:scheduleSessionId", secheduleSessionController.deleteScheduleSession);
 router.get("/sessions/:scheduleSessionId/seances", secheduleSessionController.getSeancesByScheduleSessionId);
+router.patch("/sessions/:scheduleSessionId/closeSession", scheduleSessionController.closeTheScheduleSession)
 
 
 router.post("/:id/seances", scheduleController.createSeance);

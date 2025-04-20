@@ -33,7 +33,7 @@ export const calculateHeureSup = async function (ScheduleSessionId) {
         const Teachers = await db.select().from(Teacher);
         Teachers.forEach(async (teacher) => {
             // get all seances of a teacher in the selected schedule 
-            const seances = await db.select().from(Seance).where(sql`${Seance.scheduleId} = ${scheduleSession[0].scheduleId} AND ${Seance.teacherId} = ${teacher.id}`);
+            const seances = await db.select().from(Seance).where(sql`${Seance.scheduleSessionId} = ${ScheduleSessionId} AND ${Seance.teacherId} = ${teacher.id}`);
             // sort the seances by day and start time
             seances.sort((a, b) => {
                 // Compare days first
@@ -57,7 +57,7 @@ export const calculateHeureSup = async function (ScheduleSessionId) {
             seanceTypeCoefs.forEach((seanceTypeCoef) => {
                 seanceTypeCoefMap.set(seanceTypeCoef.seanceType, seanceTypeCoef.value);
             } )
-            console.log(seanceTypeCoefMap);
+                
 
             // get the first courses of the teacher
             seances.forEach(async (seance)=>{
@@ -68,6 +68,7 @@ export const calculateHeureSup = async function (ScheduleSessionId) {
                     const durationInHours = calculateTimeDifference(startTime, endTime);
                     const coursDuration = durationInHours * seanceTypeCoefMap.get(seance.type); 
                    // check if the duration + calculatedCharge is less than the charge
+                   console.log(coursDuration,durationInHours, charge, calculatedCharge);
                     if (calculatedCharge+coursDuration <= charge) {
                         calculatedCharge += coursDuration;
                     } else if (calculatedCharge!= charge) {
@@ -157,14 +158,41 @@ export const createScheduleSession = async (req, res) => {
             scheduleId: scheduleId,
         });
         existingScheduleSession = await db.select().from(ScheduleSession).where(sql`${ScheduleSession.startDate} = ${startDate} AND ${ScheduleSession.scheduleId} = ${scheduleId}`);
-        // calculate the heure sup
-        await calculateHeureSup(existingScheduleSession[0].id);
+      
         return res.status(201).json({ message: "Schedule session created successfully" });
     } catch (error) {
         console.error("Error creating schedule session:", error);
         return res.status(500).json({ error: "Internal server error" });
     }
 }
+
+export const closeTheScheduleSession = async (req, res) => {
+    try {
+        const { scheduleSessionId } = req.params;
+        if (!scheduleSessionId) {
+            return res.status(400).json({ error: "All fields are required" });
+        }
+        // Check if the schedule session exists
+        const scheduleSession = await db.select().from(ScheduleSession).where(sql`${ScheduleSession.id} = ${scheduleSessionId}`);
+        if (scheduleSession.length === 0) {
+            return res.status(404).json({ error: "Schedule session not found" });
+        }
+        // Update the schedule session to closed
+        await db.update(ScheduleSession).set({ closed: true }).where(sql`${ScheduleSession.id} = ${scheduleSessionId}`);
+        // Calculate the heure sup for the schedule session
+        const result = await calculateHeureSup(scheduleSessionId);
+        if (result) {
+            return res.status(200).json({ message: "Schedule session closed successfully and heure sup calculated" });
+        } else {
+            return res.status(500).json({ error: "Error calculating heure sup" });
+        }
+    }
+    catch (error) {
+        console.error("Error closing schedule session:", error);
+        return res.status(500).json({ error: "Internal server error" });
+    }
+}
+
 
 export const getScheduleSession = async (req, res) => {
     try {
@@ -204,7 +232,7 @@ export const deleteScheduleSession = async (req, res) => {
 
 export const updateScheduleSession = async (req, res) => {
     try {
-        const { scheduleSessionId } = req.paradms;
+        const { scheduleSessionId } = req.params;
         const { startDate, endDate } = req.query;
         if (!scheduleSessionId || !startDate || !endDate) {
             return res.status(400).json({ error: "All fields are required" });

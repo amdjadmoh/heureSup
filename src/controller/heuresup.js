@@ -49,17 +49,28 @@ export const getTeacherHeureSupByWeeks = async function (req, res) {
                 const date = new Date(year, startMonth - 1, startDay);
                 const dayIndex = date.getDay();
                 let heuresupHours= 0;
+                // convert seanceDay to number in english format
+                const datetoCheck = new Date(year, startMonth - 1, startDay);
+                // get absences of that day
+                const datetoCheckString = datetoCheck.toISOString().split("T")[0];
+                const absences = await db.select().from(Absence).where(sql`${Absence.teacherId} = ${teacherId} AND ${Absence.date} = ${datetoCheckString}`);
                 // get heure sup hours of that day
                 const heuresupOfDay = heuresup.filter(heure => {
                     const sessionStartDate = new Date(heure.ScheduleSession.startDate);
                     const sessionEndDate = new Date(heure.ScheduleSession.finishDate);
                     const seanceDay= heure.Seance.day;
-                    // convert seanceDay to number in english format
                     const seanceDayNumber = seanceDay === "monday" ? 1 : seanceDay === "tuesday" ? 2 : seanceDay === "wednesday" ? 3 : seanceDay === "thursday" ? 4 : seanceDay === "friday" ? 5 : seanceDay === "saturday" ? 6 : 0;
-                    const datetoCheck = new Date(year, startMonth - 1, startDay);
+
+                    // check if seance id in on absences
+                    const seanceId = heure.Seance.id;
+                    const isSeanceOnAbsences = absences.some(absence => absence.seanceId === seanceId);
+                    if (isSeanceOnAbsences) {
+                        return false; // Exclude this seance if it's on an absence
+                    }
                     return dayIndex === seanceDayNumber && datetoCheck >= sessionStartDate && datetoCheck <= sessionEndDate;
                 });
                 heuresupOfDay.forEach(heure => {
+                
                     heuresupHours += heure.HeureSup.duration || 0;
                 });
                 // check if week already exists

@@ -108,6 +108,7 @@ export const Absence = pgTable("Absence", {
 
 export const Holiday = pgTable("Holiday", {
   id: serial().primaryKey(),
+  name : varchar().notNull(),
   startDate: date().notNull(),
   endDate: date().notNull(),
 });

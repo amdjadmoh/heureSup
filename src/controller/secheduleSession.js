@@ -156,6 +156,7 @@ export const createScheduleSession = async (req, res) => {
         await db.insert(ScheduleSession).values({
             startDate: startDate,
             scheduleId: scheduleId,
+            endDate  : endDate| null,
         });
         existingScheduleSession = await db.select().from(ScheduleSession).where(sql`${ScheduleSession.startDate} = ${startDate} AND ${ScheduleSession.scheduleId} = ${scheduleId}`);
       
@@ -222,7 +223,7 @@ export const deleteScheduleSession = async (req, res) => {
         // Delete the corresponding heuresup
         await db.delete(HeureSup).where(sql`${HeureSup.scheduleSessionId} = ${scheduleSessionId}`);
         // Delete the corresponding seances
-        await db.delete(Seance).where(sql`${Seance.scheduleId} = ${scheduleSessionId}`);
+        await db.delete(Seance).where(sql`${Seance.scheduleSessionId} = ${scheduleSessionId}`);
         return res.status(200).json({ message: "Schedule session deleted successfully" });
     } catch (error) {
         console.error("Error deleting schedule session:", error);

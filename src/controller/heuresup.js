@@ -54,25 +54,37 @@ export const getTeacherHeureSupByWeeks = async function (req, res) {
                 // get absences of that day
                 const datetoCheckString = datetoCheck.toISOString().split("T")[0];
                 const absences = await db.select().from(Absence).where(sql`${Absence.teacherId} = ${teacherId} AND ${Absence.date} = ${datetoCheckString}`);
+                // check if day is holiday date range
+                const holidays = await db.select().from(Holiday).where(sql`${Holiday.startDate} <= ${datetoCheckString} AND ${Holiday.endDate} >= ${datetoCheckString}`);
+                if (holidays.length > 0) {
+                    startDay++;
+                    // check if week ended
+                    if (dayIndex === 5 || startDay > monthDaysNumber) {
+                        weekIndex++;
+                    }
+                    continue; // Skip this day if it's a holiday
+
+                }
                 // get heure sup hours of that day
                 const heuresupOfDay = heuresup.filter(heure => {
                     const sessionStartDate = new Date(heure.ScheduleSession.startDate);
                     const sessionEndDate = new Date(heure.ScheduleSession.finishDate);
                     const seanceDay= heure.Seance.day;
-                    const seanceDayNumber = seanceDay === "monday" ? 1 : seanceDay === "tuesday" ? 2 : seanceDay === "wednesday" ? 3 : seanceDay === "thursday" ? 4 : seanceDay === "friday" ? 5 : seanceDay === "saturday" ? 6 : 0;
-
+                    const seanceDayNumber = seanceDay === "monday" ?  1: seanceDay === "tuesday" ? 2 : seanceDay === "wednesday" ? 3: seanceDay === "thursday" ? 4 : seanceDay === "friday" ? 5 : seanceDay === "saturday" ? 6 : 0;
                     // check if seance id in on absences
                     const seanceId = heure.Seance.id;
                     const isSeanceOnAbsences = absences.some(absence => absence.seanceId === seanceId);
                     if (isSeanceOnAbsences) {
+                        console.log(dayIndex,seanceDayNumber )
                         return false; // Exclude this seance if it's on an absence
                     }
                     return dayIndex === seanceDayNumber && datetoCheck >= sessionStartDate && datetoCheck <= sessionEndDate;
                 });
+                if ( heuresupOfDay.length >0){
                 heuresupOfDay.forEach(heure => {
-                
                     heuresupHours += heure.HeureSup.duration || 0;
                 });
+            }
                 // check if week already exists
                 const existingWeek = monthObject.weeks.find(week => week.week === weekIndex);
                 if (existingWeek) {

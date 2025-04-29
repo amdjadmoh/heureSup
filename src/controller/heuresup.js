@@ -46,11 +46,14 @@ export const getTeacherHeureSupByWeeks = async function (req, res) {
             let startDay=1;
             let weekIndex = 1;
             while (startDay <= monthDaysNumber) {
-                const date = new Date(year, startMonth - 1, startDay);
+                const date = new Date(year, startMonth - 1, startDay);  
+                date.setHours(date.getHours() + 1); // Adjust for UTC+1
                 const dayIndex = date.getDay();
                 let heuresupHours= 0;
                 // convert seanceDay to number in english format
                 const datetoCheck = new Date(year, startMonth - 1, startDay);
+                datetoCheck.setHours(datetoCheck.getHours() + 1); // Adjust for UTC+1
+
                 // get absences of that day
                 const datetoCheckString = datetoCheck.toISOString().split("T")[0];
                 const absences = await db.select().from(Absence).where(sql`${Absence.teacherId} = ${teacherId} AND ${Absence.date} = ${datetoCheckString}`);
@@ -65,6 +68,7 @@ export const getTeacherHeureSupByWeeks = async function (req, res) {
                     continue; // Skip this day if it's a holiday
 
                 }
+                if (startDay==19){console.log(dayIndex,  startDay)}
                 // get heure sup hours of that day
                 const heuresupOfDay = heuresup.filter(heure => {
                     const sessionStartDate = new Date(heure.ScheduleSession.startDate);

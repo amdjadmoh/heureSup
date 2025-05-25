@@ -4,6 +4,7 @@ import { Grade } from "../db/schema.js";
 import { sql } from "drizzle-orm";
 import { User } from "../db/schema.js";
 import { RoleEnums } from "../db/schema.js";
+import {Schedule,ScheduleSession ,Seance} from "../db/schema.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { config } from "dotenv";
@@ -85,3 +86,47 @@ export const updateTeacher = async (req, res) => {
         return res.status(500).json({ error: "Internal server error" });
     }
 }
+
+export const getTeacherPlanning = async (req, res) => {
+    const {educationalYear,id} = req.params;
+    if (!educationalYear){
+        return res.status(400).json({
+            error:"EducationYear is required , format yyyy/yyyy"
+        })
+    }
+    // get all schedules 
+    const schedules = await db.select().from(Schedule).where(eq(Schedule.educationalYear,educationalYear))
+    if (schedules.length === 0) {
+        return res.status(404).json({
+            error: "No schedules found for the given educational year"
+        });
+    }
+    // get the last session of each schedule
+    let schedulesSessions = [];
+   for (const schedule of schedules) {
+            // Use for...of loop instead of forEach to use await
+            const sessionResults = await db.select()
+                .from(ScheduleSession)
+                .where(
+                    eq(ScheduleSession.scheduleId, schedule.id),
+                    eq(ScheduleSession.closed, true)
+                )
+                .orderBy(ScheduleSession.startDate)
+                .limit(1);
+                
+            if (sessionResults.length > 0) {
+                schedulesSessions.push(sessionResults[0]);
+            }
+        }
+    // get all seances of the last session of each schedule
+    let seances = [];
+    for (const scheduleSession of schedulesSessions) {
+        const seancesOfSession = await db.select().from(Seance).where(eq(Seance.scheduleSessionId, scheduleSession.id),eq(Seance.teacherId, id));
+        seances.push(...seancesOfSession);
+    }
+   
+    return res.status(200).json({
+        seances: seances
+    })
+}
+

@@ -51,7 +51,7 @@ export const deleteTeacher = async (req, res) => {
 
 export const updateTeacher = async (req, res) => {
     try {
-        const { id, firstName, lastName, email, role, gradeId } = req.body;
+        const { id, firstName, lastName, email, role, gradeId,teacherType } = req.body;
 
         // Check if the user exists
         const existingUser = await db.select().from(User).where(sql`${User.id} = ${id}`);
@@ -79,6 +79,7 @@ export const updateTeacher = async (req, res) => {
         // Update the teacher
         await db.update(Teacher).set({
             gradeId: gradeId,
+            teacherType: teacherType,
         }).where(sql`${Teacher.id} = ${id}`);
         return res.status(200).json({ message: "Teacher updated successfully" });
     } catch (error) {

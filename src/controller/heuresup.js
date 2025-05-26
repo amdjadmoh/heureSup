@@ -1,260 +1,350 @@
-import { HeureSup,ScheduleSession ,Schedule, Teacher, Seance,Grade, SeanceTypeCoefficient,Holiday,Absence} from "../db/schema.js";   
+import { Schedule, Teacher, Seance, Grade, SeanceTypeCoefficient, Holiday, Absence } from "../db/schema.js";   
 import { db } from "../db/index.js";
-import { sql,inArray ,eq} from "drizzle-orm"
+import { sql, inArray, eq } from "drizzle-orm";
 
-export const getTeacherHeureSupByWeeks = async function (req, res) {
-    const { teacherId } = req.params;
-   let startMonth = parseInt(req.query.startMonth, 10); 
-    const endMonth = parseInt(req.query.endMonth, 10);    
-    const year = parseInt(req.query.year, 10);           
-    try {
-        // Check if the teacher exists
-        const teacher = await db.select().from(Teacher).where(sql`${Teacher.id} = ${teacherId}`);
-        if (teacher.length === 0) {
-            return res.status(404).json({ message: "Teacher not found" });
-        }
-      
-        if (!startMonth|| !endMonth | !year) {
-            return res.status(400).json({ message: "startMonth and endMonth and year are required" });
-        }
+// Define day order for sorting
+const dayOrder = {
+  "monday": 1,
+  "tuesday": 2,
+  "wednesday": 3,
+  "thursday": 4,
+  "friday": 5,
+  "saturday": 6,
+  "sunday": 0
+};
 
-        // get all heuresup for the teacher in the given date range
-        const heuresup = await db.select().from(HeureSup)
-        .innerJoin(ScheduleSession,eq(HeureSup.scheduleSessionId,ScheduleSession.id))
-        .innerJoin(Seance,eq(HeureSup.seanceId,Seance.id))
-        .where(sql`${HeureSup.teacherId} = ${teacherId}`);
-        if (heuresup.length === 0) {
-            return res.status(404).json({ message: "No hours found for this teacher" });
-        }
-        // set endDate to current date if it is null
-   
-        heuresup.forEach(heure => {
-            if (heure.ScheduleSession.finishDate === null) {
-                heure.ScheduleSession.finishDate = new Date();
-            }
-        });
-
-        // make array of object months from startDate to endDate each month contains objects of weeks
-        const months = [];
-        // get start month number and end month number#
-        while (startMonth <= endMonth) {
-            const monthObject = {
-                month: startMonth,
-                weeks: []
-            };
-            const monthDaysNumber = new Date(year, startMonth, 0).getDate(); // Get the number of days in the month
-            let startDay=1;
-            let weekIndex = 1;
-            while (startDay <= monthDaysNumber) {
-                const date = new Date(year, startMonth - 1, startDay);  
-                date.setHours(date.getHours() + 1); // Adjust for UTC+1
-                const dayIndex = date.getDay();
-                let heuresupHours= 0;
-                // convert seanceDay to number in english format
-                const datetoCheck = new Date(year, startMonth - 1, startDay);
-                datetoCheck.setHours(datetoCheck.getHours() + 1); // Adjust for UTC+1
-
-                // get absences of that day
-                const datetoCheckString = datetoCheck.toISOString().split("T")[0];
-                const absences = await db.select().from(Absence).where(sql`${Absence.teacherId} = ${teacherId} AND ${Absence.date} = ${datetoCheckString}`);
-                // check if day is holiday date range
-                const holidays = await db.select().from(Holiday).where(sql`${Holiday.startDate} <= ${datetoCheckString} AND ${Holiday.endDate} >= ${datetoCheckString}`);
-                if (holidays.length > 0) {
-                    startDay++;
-                    // check if week ended
-                    if (dayIndex === 5 || startDay > monthDaysNumber) {
-                        weekIndex++;
-                    }
-                    continue; // Skip this day if it's a holiday
-
-                }
-                if (startDay==19){console.log(dayIndex,  startDay)}
-                // get heure sup hours of that day
-                const heuresupOfDay = heuresup.filter(heure => {
-                    const sessionStartDate = new Date(heure.ScheduleSession.startDate);
-                    const sessionEndDate = new Date(heure.ScheduleSession.finishDate);
-                    const seanceDay= heure.Seance.day;
-                    const seanceDayNumber = seanceDay === "monday" ?  1: seanceDay === "tuesday" ? 2 : seanceDay === "wednesday" ? 3: seanceDay === "thursday" ? 4 : seanceDay === "friday" ? 5 : seanceDay === "saturday" ? 6 : 0;
-                    // check if seance id in on absences
-                    const seanceId = heure.Seance.id;
-                    const isSeanceOnAbsences = absences.some(absence => absence.seanceId === seanceId);
-                    if (isSeanceOnAbsences) {
-                        console.log(dayIndex,seanceDayNumber )
-                        return false; // Exclude this seance if it's on an absence
-                    }
-                    return dayIndex === seanceDayNumber && datetoCheck >= sessionStartDate && datetoCheck <= sessionEndDate;
-                });
-                if ( heuresupOfDay.length >0){
-                heuresupOfDay.forEach(heure => {
-                    heuresupHours += heure.HeureSup.duration || 0;
-                });
-            }
-                // check if week already exists
-                const existingWeek = monthObject.weeks.find(week => week.week === weekIndex);
-                if (existingWeek) {
-                    existingWeek.heuresupHours += heuresupHours;
-                } else {
-                monthObject.weeks.push({
-                    week:weekIndex,
-                    heuresupHours: heuresupHours
-                });
-            }
-                startDay++;
-                // check if week ended 
-                if (dayIndex === 5 || startDay > monthDaysNumber) {
-                    weekIndex++;
-                }
-
-            }
-            months.push(monthObject);
-            startMonth++;
-        }
-    
-        // return the months array with weeks and heuresup hours
-        return res.status(200).json(months);
-
-      
-    } catch (error) {
-        console.error("Error fetching teacher hours:", error);
-        return res.status(500).json({ message: "Internal server error" });
-    }
+// Helper function to calculate time difference (you'll need to implement this)
+function calculateTimeDifference(startTime, endTime) {
+  const start = new Date(`1970-01-01T${startTime}`);
+  const end = new Date(`1970-01-01T${endTime}`);
+  return (end - start) / (1000 * 60 * 60); // Return hours
 }
 
+async function getTeacherSeances(teacherID, startDate, endDate) {
+  // get schedules in the date range
+  const schedules = await db.select()
+    .from(Schedule)
+    .where(
+      sql`${Schedule.startDate} <= ${endDate} AND ${Schedule.endDate} >= ${startDate}`
+    );
+  
+  if (schedules.length === 0) {
+    return [];
+  }
+  // Get all seances for the teacher in the schedules
+  const seances = await db.select()
+    .from(Seance)
+    .innerJoin(Teacher, eq(Seance.teacherId, Teacher.id))
+    .where(
+      sql`${Teacher.id} = ${teacherID} AND ${Seance.scheduleID} IN (${schedules.map(s => s.id)})`
+    );
+  
+  if (seances.length === 0) {
+    return [];
+  }
 
+  // Sort seances by day and start time
+  return seances.map(row => row.Seance).sort((a, b) => {
+    // Compare days first
+    if (dayOrder[a.day] !== dayOrder[b.day]) {
+      return dayOrder[a.day] - dayOrder[b.day];
+    }
     
-        
-    
+    // If same day, compare times
+    const aTime = new Date(`1970-01-01T${a.startTime}`);
+    const bTime = new Date(`1970-01-01T${b.startTime}`);
+    return aTime - bTime;
+  });
+}
 
+async function getTeacherCharge(teacherId) {
+  const teacher = await db.select().from(Teacher).where(eq(Teacher.id, teacherId));
+  if (teacher.length === 0) return 0;
+  
+  const grade = await db.select().from(Grade).where(eq(Grade.id, teacher[0].gradeId));
+  return grade.length > 0 ? grade[0].charge : 0;
+}
+
+async function getSeanceTypeCoefficients() {
+  const seanceTypeCoefs = await db.select().from(SeanceTypeCoefficient);
+  const seanceTypeCoefMap = new Map();
+  
+  seanceTypeCoefs.forEach((seanceTypeCoef) => {
+    seanceTypeCoefMap.set(seanceTypeCoef.seanceType, seanceTypeCoef.value);
+  });
+  
+  return seanceTypeCoefMap;
+}
+
+async function processSeance(seance, calculatedCharge, charge, seanceTypeCoefMap) {
+  const startTime = seance.startTime;
+  const endTime = seance.endTime;
+  const durationInHours = calculateTimeDifference(startTime, endTime);
+  const weightedDuration = durationInHours * seanceTypeCoefMap.get(seance.type);
+  
+  // Check if the duration + calculatedCharge is less than the charge
+  if (calculatedCharge + weightedDuration <= charge) {
+    // This seance is fully covered by the teacher's charge
+    return { 
+      calculatedCharge: calculatedCharge + weightedDuration, 
+      heureSupSeances: [] 
+    };
+  } else if (calculatedCharge !== charge) {
+    // This seance is partially covered by the teacher's charge
+    const difference = charge - calculatedCharge;
+    const heureSupDuration = durationInHours - difference;
+    
+    // Update seance heureSupDuration
+    await db.update(Seance)
+      .set({ heureSupDuration })
+      .where(eq(Seance.id, seance.id));
+    
+    // Store the seance info with heure sup duration
+    const heureSupSeance = {
+      ...seance,
+      heureSupDuration,
+    };
+    
+    return { 
+      calculatedCharge: charge, 
+      heureSupSeances: [heureSupSeance] 
+    };
+  } else {
+    // This seance is entirely heure sup (charge already filled)
+    await db.update(Seance)
+      .set({ heureSupDuration: durationInHours })
+      .where(eq(Seance.id, seance.id));
+    
+    const heureSupSeance = {
+      ...seance,
+      heureSupDuration: durationInHours,
+
+    };
+    
+    return { 
+      calculatedCharge: charge, 
+      heureSupSeances: [heureSupSeance] 
+    };
+  }
+}
+
+const CalculatetHeureSup = async (teacherId, startDate, endDate) => {
+  const seances = await getTeacherSeances(teacherId, startDate, endDate);
+  
+  if (seances.length === 0) {
+    return {
+      teacherId,
+      totalHeureSupHours: 0,
+      totalChargeUsed: 0,
+      heureSupSeances: [],
+      summary: {
+        coursSeances: 0,
+        tdSeances: 0,
+        tpSeances: 0
+      }
+    };
+  }
+
+  // Calculate heureSup
+  const charge = await getTeacherCharge(teacherId);
+  const seanceTypeCoefMap = await getSeanceTypeCoefficients();
+  let calculatedCharge = 0;
+  let allHeureSupSeances = [];
+
+  // First process the "cours" type seances
+  const coursSeances = seances.filter(seance => seance.type === "cours");
+  for (const seance of coursSeances) {
+    const result = await processSeance(
+      seance, 
+      calculatedCharge, 
+      charge, 
+      seanceTypeCoefMap
+    );
+    calculatedCharge = result.calculatedCharge;
+    allHeureSupSeances = allHeureSupSeances.concat(result.heureSupSeances);
+  }
+  
+  // Then process other types of seances (td, tp)
+  const otherSeances = seances.filter(seance => seance.type === "td" || seance.type === "tp");
+  for (const seance of otherSeances) {
+    const result = await processSeance(
+      seance,  
+      calculatedCharge, 
+      charge, 
+      seanceTypeCoefMap
+    );
+    calculatedCharge = result.calculatedCharge;
+    allHeureSupSeances = allHeureSupSeances.concat(result.heureSupSeances);
+  }
+
+  // Calculate totals
+  const totalHeureSupHours = allHeureSupSeances.reduce((total, seance) => 
+    total + (seance.heureSupDuration || 0), 0
+  );
+
+  const summary = {
+    coursSeances: allHeureSupSeances.filter(s => s.type === "cours").length,
+    tdSeances: allHeureSupSeances.filter(s => s.type === "td").length,
+    tpSeances: allHeureSupSeances.filter(s => s.type === "tp").length
+  };
+
+  return {
+    teacherId,
+    totalHeureSupHours,
+    totalChargeUsed: calculatedCharge,
+    maxCharge: charge,
+    heureSupSeances: allHeureSupSeances,
+    summary,
+    dateRange: {
+      startDate,
+      endDate
+    }
+  };
+};
+
+export const getTeacherHeureSupByWeeks = async function (req, res) {
+  const { startDate: startDateParam, endDate: endDateParam } = req.query;
+  const { teacherId } = req.params;
+  
+  if (!teacherId) {
+    return res.status(400).json({ message: "Teacher ID is required" });
+  }
+
+  if (!startDateParam || !endDateParam) {
+    return res.status(400).json({ message: "startDate and endDate are required (format: YYYY-MM-DD)" });
+  }
+
+  try {
+    // Parse and validate dates
+    const startDate = new Date(startDateParam);
+    const endDate = new Date(endDateParam);
+    
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      return res.status(400).json({ message: "Invalid date format. Use YYYY-MM-DD" });
+    }
+    
+    if (startDate > endDate) {
+      return res.status(400).json({ message: "Start date must be before or equal to end date" });
+    }
+
+    // Check if the teacher exists
+    const teacher = await db.select().from(Teacher).where(eq(Teacher.id, teacherId));
+    if (teacher.length === 0) {
+      return res.status(404).json({ message: "Teacher not found" });
+    }
+      // Calculate heure sup for the date range
+    const heureSupData = await CalculatetHeureSup(teacherId, startDate, endDate);
+    
+    // Build date structure for weeks within the date range
+    const dateRangeData = [];
+    let currentDate = new Date(startDate);
+    currentDate.setDate(1); // Start from beginning of the start month
+    
+    const lastMonth = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0); // Last day of end month
+    
+    while (currentDate <= lastMonth) {
+      const monthObject = {
+        month: currentDate.getMonth() + 1,
+        year: currentDate.getFullYear(),
+        weeks: []
+      };
+        const monthDaysNumber = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
       
-
-// export const getScheduleOfTeacher = async function (req, res) {
-//     const { teacherId } = req.params;
-//     try {
-//         // Check if the teacher exists
-//         const teacher = await db.select().from(Teacher).where(sql`${Teacher.id} = ${teacherId}`);
-//         if (teacher.length === 0) {
-//             return res.status(404).json({ message: "Teacher not found" });
-//         }
-
-//         // Get all seances for the teacher
-//         const seances = await db.select().from(Seance).where(sql`${Seance.teacherId} = ${teacherId}`);
-//         if (seances.length === 0) {
-//             return res.status(404).json({ message: "No seances found for this teacher" });
-//         }
-//         // Mark the suplemntary seances
-//         const heuresup = await db.select().from(HeureSup).where(sql`${HeureSup.teacherId} = ${teacherId}`);
-//         // get scheduleSession ids from heuresup
-//         const sessionIds = heuresup.map(heure => heure.scheduleSessionId);
-//         // Get all schedule sessions for the teacher
-//         const scheduleSessions = await db.select().from(ScheduleSession).where(inArray(ScheduleSession.id, sessionIds));
-//         // if there are multiple schedule sessions with the same scheduleId, keep only the latest one
-//         const scheduleSessionIds = scheduleSessions.map(session => session.scheduleId);
-//         const scheduleSessionsMap = new Map();
-//         scheduleSessions.forEach(session => {
-//             if (!scheduleSessionsMap.has(session.scheduleId)) {
-//                 scheduleSessionsMap.set(session.scheduleId, session);
-//             } else {
-//                 const existingSession = scheduleSessionsMap.get(session.scheduleId);
-//                 if (new Date(session.startDate) > new Date(existingSession.startDate)) {
-//                     scheduleSessionsMap.set(session.scheduleId, session);
-//                 }
-//             }
-//         });
-//         // keep heuresup that have scheduleSessionId in scheduleSessionsMap
-//         const filteredHeuresup = heuresup.filter(heure => scheduleSessionsMap.has(heure.scheduleSessionId));
-//         console.log(filteredHeuresup);
-//         return res.status(200).json(scheduleSessions);
-//     } catch (error) {
-//         console.error("Error fetching schedule sessions:", error);
-//         return res.status(500).json({ message: "Internal server error" });
-//     }
-// }
-
-// export const get = async function (req, res) {
-//     const { teacherId } = req.params;
-//     try {
-//         // Check if the teacher exists
-//         const teacher = await db.select().from(Teacher).where(sql`${Teacher.id} = ${teacherId}`);
-//         if (teacher.length === 0) {
-//             return res.status(404).json({ message: "Teacher not found" });
-//         }
-
-//         // Check if the teacher has any hours
-//         const heuresup = await db.select().from(HeureSup) .innerJoin(Seance, eq(HeureSup.seanceId, Seance.id)).where(sql`${HeureSup.teacherId} = ${teacherId}`);
-//         console.log(heuresup);
-//         if (heuresup.length === 0) {
-//             return res.status(404).json({ message: "No hours found for this teacher" });
-//         }
-//         // Group by session ID
-//         const groupedHeureSup = heuresup.reduce((acc, heure) => {
-//             const sessionId = heure.scheduleSessionId;
-//             if (!acc[sessionId]) {
-//                 acc[sessionId] = [];
-//             }
-//             acc[sessionId].push(heure);
-//             return acc;
-//         }, {});
-
-//         // Get all schedule sessions
-//         const scheduleSessionIds = Object.keys(groupedHeureSup);
-//         const scheduleSessions = await db.select().from(ScheduleSession).where(inArray(ScheduleSession.id, scheduleSessionIds));
+      // Initialize all weeks for the month
+      const weeklyData = new Map();
+        // First, initialize all possible weeks for the month
+      const totalWeeks = Math.ceil(monthDaysNumber / 7);
+      for (let week = 1; week <= totalWeeks; week++) {
+        weeklyData.set(week, 0);
+      }
+      
+      // Process each day of the month
+      for (let day = 1; day <= monthDaysNumber; day++) {
+        const dateToCheck = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
         
-//         // Group sessions by scheduleId to find duplicates
-//         const sessionsByScheduleId = scheduleSessions.reduce((acc, session) => {
-//             const scheduleId = session.scheduleId;
-//             if (!acc[scheduleId]) {
-//                 acc[scheduleId] = [];
-//             }
-//             acc[scheduleId].push(session);
-//             return acc;
-//         }, {});
-
-//         // Create a Set to track which session IDs to remove
-//         const scheduleSessionIdsToRemove = new Set();
-
-//         // For each group of sessions with the same scheduleId
-//         Object.values(sessionsByScheduleId).forEach(sessions => {
-//             // If there's more than one session with the same scheduleId
-//             if (sessions.length > 1) {
-//                 // Sort by startDate descending (latest first)
-//                 sessions.sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
-                
-//                 // Keep the first one (latest), mark the rest for removal
-//                 for (let i = 1; i < sessions.length; i++) {
-//                     scheduleSessionIdsToRemove.add(sessions[i].id.toString());
-//                 }
-//             }
-//         });
-
-//         // Filter out sessions that should be removed
-//         const filteredGroupedHeureSup = Object.fromEntries(
-//             Object.entries(groupedHeureSup).filter(([key]) => !scheduleSessionIdsToRemove.has(key))
-//         );
-
-//         // Create the result with relevant information
-//         const result = [];
-//         for (const [sessionId, hours] of Object.entries(filteredGroupedHeureSup)) {
-//             const session = scheduleSessions.find(s => s.id == sessionId);
+        // Calculate week number (1-based)
+        const weekNumber = Math.ceil(day / 7);
+        
+        // Only process dates within our actual range
+        if (dateToCheck >= startDate && dateToCheck <= endDate) {
+          const dayIndex = dateToCheck.getDay();
+          let heuresupHours = 0;          // Format date for comparison
+          const datetoCheckString = `${dateToCheck.getFullYear()}-${String(dateToCheck.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          
+          // Get absences of that day
+          const absences = await db.select().from(Absence).where(
+            sql`${Absence.teacherId} = ${teacherId} AND ${Absence.date} = ${datetoCheckString}`
+          );
+          
+          // Check if day is holiday date range
+          const holidays = await db.select().from(Holiday).where(
+            sql`${Holiday.startDate} <= ${datetoCheckString} AND ${Holiday.endDate} >= ${datetoCheckString}`
+          );
+          console.log("Holidays for date", datetoCheckString, holidays);
+          if (holidays.length === 0) { // Only count if not a holiday
+            // Get heure sup hours of that day from the calculated data
+            const heuresupOfDay = heureSupData.heureSupSeances.filter(seance => {
+              const seanceDayNumber = seance.day === "monday" ? 1 : 
+                                      seance.day === "tuesday" ? 2 : 
+                                      seance.day === "wednesday" ? 3 : 
+                                      seance.day === "thursday" ? 4 : 
+                                      seance.day === "friday" ? 5 : 
+                                      seance.day === "saturday" ? 6 : 0;
+              
+              // Check if seance is on absences
+              const seanceId = seance.id;
+              const isSeanceOnAbsences = absences.some(absence => absence.seanceId === seanceId);
+              
+              if (isSeanceOnAbsences) {
+                return false; // Exclude this seance if it's on an absence
+              }
+              
+              return dayIndex === seanceDayNumber;
+            });
             
-//             // Calculate total hours and amount
-//             let totalHours = 0;
-//             hours.forEach(hour => {
-//                 totalHours += hour.duration || 0;
-//             });
-            
-//             result.push({
-//                 sessionId: parseInt(sessionId),
-//                 startDate: session.startDate,
-//                 endDate: session.finishDate,
-//                 totalHours: totalHours,
-//                 details: hours
-//             });
-//         }
+            if (heuresupOfDay.length > 0) {
+              heuresupOfDay.forEach(seance => {
+                heuresupHours += seance.heureSupDuration || 0;
+              });
+            }
+          }
+          
+          // Add hours to the week
+          weeklyData.set(weekNumber, weeklyData.get(weekNumber) + heuresupHours);
+        }
+      }
+      
+      // Convert weekly data to the expected format
+      weeklyData.forEach((hours, weekNumber) => {
+        monthObject.weeks.push({
+          week: weekNumber,
+          heuresupHours: hours
+        });
+      });
+      
+      // Sort weeks by week number
+      monthObject.weeks.sort((a, b) => a.week - b.week);
+        // Always add month (even if all weeks have 0 hours, they should still be shown)
+      dateRangeData.push(monthObject);
+      
+      // Move to next month
+      currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+    }
 
-//         return res.status(200).json(result);
-     
-//     } catch (error) {
-//         console.error("Error fetching hours:", error);
-//         return res.status(500).json({ message: "Internal server error" });
-//     }
-// }
+    // Return the date range data with weeks and heuresup hours, plus summary
+    return res.status(200).json({
+      dateRange: {
+        startDate: startDateParam,
+        endDate: endDateParam
+      },
+      months: dateRangeData,
+    });
+
+  } catch (error) {
+    console.error("Error fetching teacher hours:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// Export the calculation function for reuse
+export { CalculatetHeureSup };

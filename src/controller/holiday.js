@@ -4,13 +4,13 @@ const { sql } = require("drizzle-orm");
 
 exports.createHoliday = async (req, res) => {
     try {
-        const { startDate, endDate } = req.body;
+        const { startDate, endDate,name } = req.body;
 
         if (new Date(startDate) > new Date(endDate)) {
             return res.status(400).json({ error: "Start date cannot be after end date" });
         }
 
-        const newHoliday = await db.insert(Holiday).values({ startDate, endDate }).returning();
+        const newHoliday = await db.insert(Holiday).values({ startDate, endDate,name }).returning();
         return res.status(201).json(newHoliday[0]);
     } catch (error) {
         console.error("Error creating holiday:", error);
@@ -45,7 +45,7 @@ exports.getHolidayById = async (req, res) => {
 exports.updateHoliday = async (req, res) => {
     try {
         const { id } = req.params;
-        const { startDate, endDate } = req.body;
+        const { startDate, endDate,name } = req.body;
 
         if (new Date(startDate) > new Date(endDate)) {
             return res.status(400).json({ error: "Start date cannot be after end date" });
@@ -56,7 +56,7 @@ exports.updateHoliday = async (req, res) => {
             return res.status(404).json({ error: "Holiday not found" });
         }
 
-        await db.update(Holiday).set({ startDate, endDate }).where(sql`${Holiday.id} = ${id}`);
+        await db.update(Holiday).set({ startDate, endDate,name }).where(sql`${Holiday.id} = ${id}`);
         return res.status(200).json({ message: "Holiday updated successfully" });
     } catch (error) {
         console.error("Error updating holiday:", error);

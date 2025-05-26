@@ -12,8 +12,8 @@ export const signup = async (req, res) => {
   try {
     const { firstName, lastName, email, password,role } = req.body;
     if (role=="teacher"){
-      const { gradeID } = req.body;
-      if (!firstName || !lastName || !email || !password  || !role || !gradeID) {
+      const { gradeID,paymentType,teacherType, accountNumber } = req.body;
+      if (!firstName || !lastName || !email || !password  || !role || !gradeID || !paymentType || !teacherType || !accountNumber) {
         return res.status(400).json({ error: "All fields are required" });
       }
       // Check if the user already exists
@@ -31,6 +31,7 @@ export const signup = async (req, res) => {
         email: email,
         password: hashedPassword,
         role: role,
+
       });
       
       // Retrieve the inserted user by email
@@ -44,6 +45,10 @@ export const signup = async (req, res) => {
       await db.insert(Teacher).values({
         id: newUser.id, // Use the retrieved ID
         gradeId: gradeID,
+         paymentType: paymentType,
+        teacherType: teacherType,
+        accountNumber: accountNumber,
+
       });
       
     } else {

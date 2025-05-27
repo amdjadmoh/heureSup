@@ -359,7 +359,6 @@ export const generateTeacherPaymentExcel = async (req, res) => {
 // Helper function to process a teacher with a specific grade for a specific time period
 async function processTeacherWithGrade(teacher, gradeId, startDate, endDate, gradesData, teachersData) {
   try {
-    console.log(`Processing teacher ${teacher.id} with grade ${gradeId} from ${startDate.toISOString()} to ${endDate.toISOString()}`);
     // Get the hour sup results for this teacher in the specified date range
     const heureSupResult = await CalculatetHeureSup(
       teacher.id, 
@@ -579,8 +578,8 @@ export const generateEngagmentExcel = async (req, res) => {
     }
     // Process each teacher's data and handle grade changes for Vacataires
     for (const teacher of Vacataires) {
-      console.log("teacher", teacher);
-      // Get any grade sessions for this teacher during the reporting period
+     
+      // Get any grade sessions for this teacher during the reporting period[]
       const gradeSessions = await db.select()
         .from(GradeSession)
         .where(
@@ -599,7 +598,7 @@ export const generateEngagmentExcel = async (req, res) => {
         )
         .orderBy(GradeSession.startDate);      // If no grade sessions found, simply use the teacher's current grade
         // Store teacher entries for merging by grade
-        console.log("gradeSessions vactaire", gradeSessions);
+        console.log("gradeSessions", gradeSessions);  
         for (const session of gradeSessions) {
           // Calculate the effective period for this grade (for calculation purposes)
           // This is used for accurate hour calculation but the display will show the full period

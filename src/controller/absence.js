@@ -96,3 +96,21 @@ exports.deleteAbsence = async (req, res) => {
         return res.status(500).json({ error: "Internal server error" });
     }
 };
+
+exports.getAbsencesByTeacher = async (req, res) => {
+    try {
+        const { teacherId } = req.params;
+
+        const teacher = await db.select().from(Teacher).where(sql`${Teacher.id} = ${teacherId}`);
+        if (teacher.length === 0) {
+            return res.status(404).json({ error: "Teacher not found" });
+        }
+
+        const absences = await db.select().from(Absence).where(sql`${Absence.teacherId} = ${teacherId}`);
+        return res.status(200).json(absences);
+    } catch (error) {
+        console.error("Error fetching absences by teacher:", error);
+        return res.status(500).json({ error: "Internal server error" });
+    }
+}
+;

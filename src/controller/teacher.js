@@ -1,14 +1,15 @@
 import {db} from "../db/index.js";
 import { Teacher } from "../db/schema.js";
-import { Grade } from "../db/schema.js";
+import { Grade ,GradeSession} from "../db/schema.js";
 import { sql } from "drizzle-orm";
 import { User } from "../db/schema.js";
-import { RoleEnums } from "../db/schema.js";
+import {createGradeSession} from "./gradeSession.js";
+import { RoleEnums } from  "../db/schema.js";
 import {Schedule ,Seance} from "../db/schema.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { config } from "dotenv";
-import { eq, ne, gt, gte } from "drizzle-orm";
+import { eq, ne, gt, gte ,and,isNull} from "drizzle-orm";
 config();
 
 
@@ -81,6 +82,59 @@ export const updateTeacher = async (req, res) => {
             gradeId: gradeId,
             teacherType: teacherType,
         }).where(sql`${Teacher.id} = ${id}`);
+        // if grade is changed, update the grade sessions
+        if (existingUser[0].gradeId !== gradeId) {
+            const startDate = new Date();
+            startDate.setDate(startDate.getDate() + 1);
+
+            const parsedStartDate = new Date(Date.UTC(
+                startDate.getUTCFullYear(),
+                startDate.getUTCMonth(),
+                startDate.getUTCDate()
+            ));            console.log(parsedStartDate)
+            const teacherId = id; // Assuming id is the teacher's ID
+                // Find any existing open session for this teacher (with null finishDate)
+                const existingOpenSessions = await db
+                  .select()
+                  .from(GradeSession)
+                  .where(
+                    and(
+                      eq(GradeSession.teacherId, teacherId),
+                      isNull(GradeSession.finishDate)
+                    )
+                  );
+                
+                // Close any open sessions as of the day before the new session starts
+                if (existingOpenSessions.length > 0) {
+                    const previousDay = new Date(parsedStartDate);
+                    previousDay.setDate(previousDay.getDate() - 1);
+                  
+                  for (const session of existingOpenSessions) {
+                    await db
+                      .update(GradeSession)
+                      .set({ finishDate: reviousDay.toISOString().split('T')[0] })
+                      .where(eq(GradeSession.id, session.id));
+                  }
+                }
+                
+                // Create new session
+                const newSession = await db
+                  .insert(GradeSession)
+                  .values({
+                    teacherId: teacherId,
+                    gradeId: gradeId,
+                    startDate: parsedStartDate.toISOString().split('T')[0],
+                    finishDate: null  // Open-ended session
+                  })
+                  .returning();
+                
+                // Update teacher's current grade
+                await db
+                  .update(Teacher)
+                  .set({ gradeId: gradeId })
+                  .where(eq(Teacher.id, teacherId));
+                  
+        }
         return res.status(200).json({ message: "Teacher updated successfully" });
     } catch (error) {
         console.error("Error updating teacher:", error);

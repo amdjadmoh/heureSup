@@ -54,8 +54,12 @@ export const createGradeSession = async (req, res) => {
     }
     
     // Parse date to ensure correct format
-    const parsedStartDate = new Date(startDate);
-    if (isNaN(parsedStartDate.getTime())) {
+    const parsedStartDate = new Date(Date.UTC(
+      startDate.getUTCFullYear(),
+      startDate.getUTCMonth(),
+      startDate.getUTCDate()
+  ));  
+       if (isNaN(parsedStartDate.getTime())) {
       return res.status(400).json({ error: "Invalid start date format. Use YYYY-MM-DD" });
     }
     
@@ -82,6 +86,8 @@ export const createGradeSession = async (req, res) => {
           .where(eq(GradeSession.id, session.id));
       }
     }
+    // next day
+
     
     // Create new session
     const newSession = await db
@@ -175,3 +181,32 @@ export const deleteGradeSession = async (req, res) => {
     return res.status(500).json({ error: 'Internal server error', details: error.message });
   }
 };
+
+export const getGradeSessionsOfTeacher = async (req, res) => {
+  try {
+    const { teacherId } = req.params;
+    
+    if (!teacherId) {
+      return res.status(400).json({ error: "Teacher ID is required" });
+    }
+    
+    const gradeSessions = await db.select({
+      id: GradeSession.id,
+      startDate: GradeSession.startDate,
+      finishDate: GradeSession.finishDate,
+      teacherId: GradeSession.teacherId,
+      gradeId: GradeSession.gradeId,
+      gradeName: Grade.GradeName,
+      hourlyRate: Grade.PricePerHour
+    })
+    .from(GradeSession)
+    .innerJoin(Grade, eq(GradeSession.gradeId, Grade.id))
+    .where(eq(GradeSession.teacherId, teacherId))
+    .orderBy(GradeSession.startDate);
+    
+    return res.status(200).json(gradeSessions);
+  } catch (error) {
+    console.error('Error getting grade sessions of teacher:', error);
+    return res.status(500).json({ error: 'Internal server error', details: error.message });
+  }
+}

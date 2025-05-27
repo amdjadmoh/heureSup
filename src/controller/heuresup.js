@@ -131,14 +131,22 @@ async function processSeance(seance, calculatedCharge, charge, seanceTypeCoefMap
 }
 
 async function calculateHeureSupForSeances(seances, calculatedCharge, charge, seanceTypeCoefMap) {
+async function calculateHeureSupForSeances(seances, calculatedCharge, charge, seanceTypeCoefMap) {
   let allHeureSupSeances = [];
 
+  // Process "cours" type seances first
+  for (const seance of seances.filter(seance => seance.type === "cours")) {
+    const result = await processSeance(seance, calculatedCharge, charge, seanceTypeCoefMap);
   // Process "cours" type seances first
   for (const seance of seances.filter(seance => seance.type === "cours")) {
     const result = await processSeance(seance, calculatedCharge, charge, seanceTypeCoefMap);
     calculatedCharge = result.calculatedCharge;
     allHeureSupSeances = allHeureSupSeances.concat(result.heureSupSeances);
   }
+
+  // Process "td" and "tp" type seances
+  for (const seance of seances.filter(seance => seance.type === "td" || seance.type === "tp")) {
+    const result = await processSeance(seance, calculatedCharge, charge, seanceTypeCoefMap);
 
   // Process "td" and "tp" type seances
   for (const seance of seances.filter(seance => seance.type === "td" || seance.type === "tp")) {
@@ -238,6 +246,20 @@ const CalculatetHeureSup = async (teacherId, startDate, endDate) => {
           0
         );
 
+        return {
+          teacherId,
+          totalHeureSupHours,
+          totalChargeUsed: calculatedCharge,
+          maxCharge: charge,
+          heureSupSeances: allHeureSupSeances,
+          dateRange: { startDate, endDate }
+        };
+      }
+    }
+
+    default:
+      throw new Error("Unknown teacher type");
+  }
         return {
           teacherId,
           totalHeureSupHours,

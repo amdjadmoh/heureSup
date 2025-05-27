@@ -1,4 +1,4 @@
-const heureSupController = require('../controller/heureSup');
+const heureSupController = require('../controller/heuresup');
 const express = require('express');
 const router = express.Router();
 

@@ -18,7 +18,10 @@ const scheduleRouter = require('./routes/scheduleSeanceSessions');
 const heureSupRouter = require('./routes/heureSup');
 const salaryRouter = require('./routes/salary');
 
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:5173', // frontend URL
+  credentials: true, // allow credentials
+}));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieParser());

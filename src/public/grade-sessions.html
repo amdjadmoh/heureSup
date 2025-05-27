@@ -1,0 +1,344 @@
+// This file contains a simple tool for managing teachers' grade sessions
+// It should be served by the Express app as a static file
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grade Session Manager</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        select, input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 30px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .action-button {
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .action-button:hover {
+            background-color: #c0392b;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Teacher Grade Session Manager</h1>
+        
+        <div id="statusMessage" style="display:none;"></div>
+        
+        <div class="form-group">
+            <label for="teacher">Select Teacher:</label>
+            <select id="teacher" onchange="loadGradeSessions()">
+                <option value="">-- Select a teacher --</option>
+            </select>
+        </div>
+        
+        <h2>Current Grade Sessions</h2>
+        <div id="gradeSessionsTable">
+            <p>Select a teacher to view their grade sessions</p>
+        </div>
+        
+        <h2>Add New Grade Session</h2>
+        <div class="form-group">
+            <label for="gradeId">Select Grade:</label>
+            <select id="gradeId">
+                <option value="">-- Select a grade --</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="startDate">Start Date:</label>
+            <input type="date" id="startDate" required>
+        </div>
+        <button onclick="addGradeSession()">Add Grade Session</button>
+    </div>
+
+    <script>
+        // Load all teachers when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            loadTeachers();
+            loadGrades();
+        });
+        
+        function loadTeachers() {
+            fetch('/api/teacher')
+                .then(response => response.json())
+                .then(data => {
+                    const teacherSelect = document.getElementById('teacher');
+                    teacherSelect.innerHTML = '<option value="">-- Select a teacher --</option>';
+                    
+                    data.forEach(teacher => {
+                        const option = document.createElement('option');
+                        option.value = teacher.id;
+                        option.textContent = `${teacher.lastName} ${teacher.firstName}`;
+                        teacherSelect.appendChild(option);
+                    });
+                })
+                .catch(error => {
+                    showStatus('Error loading teachers: ' + error.message, 'error');
+                });
+        }
+        
+        function loadGrades() {
+            fetch('/api/grade')
+                .then(response => response.json())
+                .then(data => {
+                    const gradeSelect = document.getElementById('gradeId');
+                    gradeSelect.innerHTML = '<option value="">-- Select a grade --</option>';
+                    
+                    data.forEach(grade => {
+                        const option = document.createElement('option');
+                        option.value = grade.id;
+                        option.textContent = grade.GradeName;
+                        gradeSelect.appendChild(option);
+                    });
+                })
+                .catch(error => {
+                    showStatus('Error loading grades: ' + error.message, 'error');
+                });
+        }
+        
+        function loadGradeSessions() {
+            const teacherId = document.getElementById('teacher').value;
+            
+            if (!teacherId) {
+                document.getElementById('gradeSessionsTable').innerHTML = '<p>Select a teacher to view their grade sessions</p>';
+                return;
+            }
+            
+            fetch(`/api/gradeSession/teacher/${teacherId}`)
+                .then(response => response.json())
+                .then(data => {
+                    let tableHTML = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Grade</th>
+                                <th>Start Date</th>
+                                <th>End Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                    `;
+                    
+                    if (data.length === 0) {
+                        tableHTML += `
+                            <tr>
+                                <td colspan="5">No grade sessions found for this teacher</td>
+                            </tr>
+                        `;
+                    } else {
+                        data.forEach(session => {
+                            tableHTML += `
+                                <tr>
+                                    <td>${session.id}</td>
+                                    <td>${session.gradeName}</td>
+                                    <td>${formatDate(session.startDate)}</td>
+                                    <td>${session.finishDate ? formatDate(session.finishDate) : 'Current'}</td>
+                                    <td>
+                                        ${!session.finishDate ? 
+                                            `<button class="action-button" onclick="endGradeSession(${session.id})">End Session</button>` : 
+                                            `<button class="action-button" onclick="deleteGradeSession(${session.id})">Delete</button>`
+                                        }
+                                    </td>
+                                </tr>
+                            `;
+                        });
+                    }
+                    
+                    tableHTML += `
+                        </tbody>
+                    </table>
+                    `;
+                    
+                    document.getElementById('gradeSessionsTable').innerHTML = tableHTML;
+                })
+                .catch(error => {
+                    showStatus('Error loading grade sessions: ' + error.message, 'error');
+                });
+        }
+        
+        function addGradeSession() {
+            const teacherId = document.getElementById('teacher').value;
+            const gradeId = document.getElementById('gradeId').value;
+            const startDate = document.getElementById('startDate').value;
+            
+            if (!teacherId || !gradeId || !startDate) {
+                showStatus('Please fill in all fields', 'error');
+                return;
+            }
+            
+            const data = {
+                teacherId: parseInt(teacherId),
+                gradeId: parseInt(gradeId),
+                startDate: startDate
+            };
+            
+            fetch('/api/gradeSession', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw new Error(err.error || 'Failed to add grade session'); });
+                }
+                return response.json();
+            })
+            .then(data => {
+                showStatus('Grade session added successfully', 'success');
+                loadGradeSessions(); // Reload the list
+                document.getElementById('gradeId').value = '';
+                document.getElementById('startDate').value = '';
+            })
+            .catch(error => {
+                showStatus('Error: ' + error.message, 'error');
+            });
+        }
+        
+        function endGradeSession(id) {
+            const today = new Date().toISOString().split('T')[0];
+            
+            fetch(`/api/gradeSession/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ finishDate: today })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw new Error(err.error || 'Failed to end grade session'); });
+                }
+                return response.json();
+            })
+            .then(data => {
+                showStatus('Grade session ended successfully', 'success');
+                loadGradeSessions(); // Reload the list
+            })
+            .catch(error => {
+                showStatus('Error: ' + error.message, 'error');
+            });
+        }
+        
+        function deleteGradeSession(id) {
+            if (!confirm('Are you sure you want to delete this grade session?')) {
+                return;
+            }
+            
+            fetch(`/api/gradeSession/${id}`, {
+                method: 'DELETE'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw new Error(err.error || 'Failed to delete grade session'); });
+                }
+                return response.json();
+            })
+            .then(data => {
+                showStatus('Grade session deleted successfully', 'success');
+                loadGradeSessions(); // Reload the list
+            })
+            .catch(error => {
+                showStatus('Error: ' + error.message, 'error');
+            });
+        }
+        
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            return date.toLocaleDateString();
+        }
+        
+        function showStatus(message, type) {
+            const statusElement = document.getElementById('statusMessage');
+            statusElement.textContent = message;
+            statusElement.className = `status ${type}`;
+            statusElement.style.display = 'block';
+            
+            // Hide after 5 seconds
+            setTimeout(() => {
+                statusElement.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

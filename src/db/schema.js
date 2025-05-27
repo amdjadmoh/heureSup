@@ -127,5 +127,8 @@ export const GradeSession = pgTable("Sessions", {
   teacherId: integer()
     .references(() => Teacher.id, { onUpdate: "cascade", onDelete: "cascade" })
     .notNull(),
+  gradeId: integer()
+    .references(() => Grade.id, { onUpdate: "cascade", onDelete: "cascade" })
+    .notNull(),
 });
 

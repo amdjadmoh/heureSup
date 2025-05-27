@@ -1,5 +1,5 @@
 import {db} from "../db/index.js";
-import { Grade } from "../db/schema.js";
+import { Grade,GradeSession, Teacher} from "../db/schema.js";
 import { sql } from "drizzle-orm";
 
 
@@ -95,3 +95,45 @@ export const deleteGrade = async (req, res) => {
     }
 }
 
+
+export const createGradeSession = async (req, res) => {
+    try {
+        const {teacherId, gradeId,startDate} = req.body;
+        if (!teacherId || !gradeId) {
+            return res.status(400).json({ error: "Teacher ID and Grade ID are required" });
+        }
+        // Check if the grade exists
+        const existingGrade = await db.select().from(Grade).where(sql`${Grade.id} = ${gradeId}`);
+        if (existingGrade.length === 0) {
+            return res.status(404).json({ error: "Grade not found" });
+        }
+        // Check if the teacher exists
+        const existingTeacher = await db.select().from(Teacher).where(sql`${Teacher.id} = ${teacherId}`);
+        if (existingTeacher.length === 0) {
+            return res.status(404).json({ error: "Teacher not found" });
+        }
+        // if there is alrady a session before , end it 
+        const existingSession = await db.select().from(GradeSession).where(sql`${GradeSession.teacherId} = ${teacherId} AND ${GradeSession.finishDate} IS NULL`);
+        if (existingSession.length > 0) {
+            if (existingSession[0].gradeId == gradeId) {
+                return res.status(400).json({ error: "There is already an open session for this teacher with the same grade" });
+            }
+            // End the existing session
+            await db.update(GradeSession).set({
+                finishDate: startDate // Set the end date to now
+            }).where(sql`${GradeSession.teacherId} = ${teacherId} AND ${GradeSession.finishDate} IS NULL`);
+        }
+        // Insert the new grade session
+        await db.insert(GradeSession).values({
+            teacherId: teacherId,
+            gradeId: gradeId,
+            startDate: startDate,
+        });
+        return res.status(201).json({ message: "Grade session created successfully" });
+    }
+    catch (error) {
+        console.error("Error creating grade session:", error);
+        return res.status(500).json({ error: "Internal server error" });
+    }
+
+}

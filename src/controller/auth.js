@@ -3,7 +3,7 @@ import bcrypt from "bcrypt";
 import { sql } from "drizzle-orm";
 import jwt from "jsonwebtoken";
 import * as schema from '../db/schema.js';
-import {User} from '../db/schema.js';
+import {User,Grade,GradeSession} from '../db/schema.js';
 import {db} from "../db/index.js";
 import { RoleEnums } from "../db/schema.js";
 import { eq, ne, gt, gte } from "drizzle-orm";
@@ -49,6 +49,12 @@ export const signup = async (req, res) => {
         teacherType: teacherType,
         accountNumber: accountNumber,
 
+      });
+      // Insert the new grade session
+      await db.insert(GradeSession).values({
+        teacherId: newUser.id, // Use the retrieved ID
+        gradeId: gradeID,
+        startDate: new Date(), // Set the start date to now
       });
       
     } else {

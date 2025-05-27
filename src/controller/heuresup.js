@@ -1,8 +1,6 @@
-import { Schedule, Teacher, Seance, Grade, SeanceTypeCoefficient, Holiday, Absence, User } from "../db/schema.js";   
+import { Schedule, Teacher, Seance, Grade, SeanceTypeCoefficient, Holiday, Absence } from "../db/schema.js";   
 import { db } from "../db/index.js";
 import { sql, inArray, eq } from "drizzle-orm";
-    import pdf from 'html-pdf';
-
 
 // Define day order for sorting
 const dayOrder = {
@@ -34,7 +32,7 @@ async function getTeacherSeances(teacherID, startDate, endDate) {
     return [];
   }
   // Get all seances for the teacher in the schedules
-  const seances = await db.select() 
+  const seances = await db.select()
     .from(Seance)
     .innerJoin(Teacher, eq(Seance.teacherId, Teacher.id))
     .where(
@@ -131,22 +129,14 @@ async function processSeance(seance, calculatedCharge, charge, seanceTypeCoefMap
 }
 
 async function calculateHeureSupForSeances(seances, calculatedCharge, charge, seanceTypeCoefMap) {
-async function calculateHeureSupForSeances(seances, calculatedCharge, charge, seanceTypeCoefMap) {
   let allHeureSupSeances = [];
 
-  // Process "cours" type seances first
-  for (const seance of seances.filter(seance => seance.type === "cours")) {
-    const result = await processSeance(seance, calculatedCharge, charge, seanceTypeCoefMap);
   // Process "cours" type seances first
   for (const seance of seances.filter(seance => seance.type === "cours")) {
     const result = await processSeance(seance, calculatedCharge, charge, seanceTypeCoefMap);
     calculatedCharge = result.calculatedCharge;
     allHeureSupSeances = allHeureSupSeances.concat(result.heureSupSeances);
   }
-
-  // Process "td" and "tp" type seances
-  for (const seance of seances.filter(seance => seance.type === "td" || seance.type === "tp")) {
-    const result = await processSeance(seance, calculatedCharge, charge, seanceTypeCoefMap);
 
   // Process "td" and "tp" type seances
   for (const seance of seances.filter(seance => seance.type === "td" || seance.type === "tp")) {
@@ -190,10 +180,12 @@ const CalculatetHeureSup = async (teacherId, startDate, endDate) => {
     }
 
     case "vacataire": {
+      console.log(`Calculating heure sup for vacataire teacher ${teacherId} from ${startDate} to ${endDate}`);
       const allHeureSupSeances = seances.map(seance => ({
         ...seance,
         heureSupDuration: calculateTimeDifference(seance.startTime, seance.endTime)
       }));
+      console.log("All heure sup seances:", allHeureSupSeances);
 
       const totalHeureSupHours = allHeureSupSeances.reduce(
         (total, seance) => total + (seance.heureSupDuration || 0),
@@ -246,20 +238,6 @@ const CalculatetHeureSup = async (teacherId, startDate, endDate) => {
           0
         );
 
-        return {
-          teacherId,
-          totalHeureSupHours,
-          totalChargeUsed: calculatedCharge,
-          maxCharge: charge,
-          heureSupSeances: allHeureSupSeances,
-          dateRange: { startDate, endDate }
-        };
-      }
-    }
-
-    default:
-      throw new Error("Unknown teacher type");
-  }
         return {
           teacherId,
           totalHeureSupHours,
@@ -354,6 +332,7 @@ export const getTeacherHeureSupByWeeks = async function (req, res) {
           const holidays = await db.select().from(Holiday).where(
             sql`${Holiday.startDate} <= ${datetoCheckString} AND ${Holiday.endDate} >= ${datetoCheckString}`
           );
+          console.log("Holidays for date", datetoCheckString, holidays);
           if (holidays.length === 0) { // Only count if not a holiday
             // Get heure sup hours of that day from the calculated data
             const heuresupOfDay = heureSupData.heureSupSeances.filter(seance => {
@@ -419,4 +398,5 @@ export const getTeacherHeureSupByWeeks = async function (req, res) {
   }
 };
 
+// Export the calculation function for reuse
 export { CalculatetHeureSup };

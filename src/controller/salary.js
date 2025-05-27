@@ -4,6 +4,7 @@ import { eq, sql, and, between, or, isNull,gte ,lte} from "drizzle-orm";
 import ExcelJS from 'exceljs';
 import path from 'path';
 import { CalculatetHeureSup } from './heuresup.js';
+import { Console } from "console";
 
 // Helper function to calculate time difference in hours
 function calculateTimeDifference(startTime, endTime) {
@@ -111,7 +112,8 @@ export const generateTeacherPaymentExcel = async (req, res) => {
         price: grade.PricePerHour
       };
     });
-    // Process each teacher's data and handle grade changes
+   
+
     for (const teacher of teachers) { 
      // Get any grade sessions for this teacher during the reporting period
       const gradeSessions = await db.select()
@@ -465,3 +467,386 @@ async function processTeacherWithGrade(teacher, gradeId, startDate, endDate, gra
     // Continue processing other teachers instead of stopping the whole process
   }
 }
+
+// Generate the salary payment Excel file for teachers
+export const generateEngagmentExcel = async (req, res) => {
+  try {
+    const { startDate, endDate, semesterValue } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({ 
+        error: "startDate and endDate are required (format: YYYY-MM-DD)" 
+      });
+    }
+
+ 
+    // Parse and validate dates
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    // Format report period dates for display (used consistently across the report)
+    const reportPeriod = `du ${start.toLocaleDateString('fr-FR')} au ${end.toLocaleDateString('fr-FR')}`;
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return res.status(400).json({ 
+        error: "Invalid date format. Use YYYY-MM-DD" 
+      });
+    }
+    
+    if (start > end) {
+      return res.status(400).json({ 
+        error: "Start date must be before or equal to end date" 
+      });
+    }
+
+
+    const teachersData = [];
+
+    // Get all  teachers
+    const Permteachers = await db.select({
+      id: Teacher.id,
+      firstName: User.firstName,
+      lastName: User.lastName,
+      accountNumber: Teacher.accountNumber,
+      teacherType: Teacher.teacherType,
+      paymentType: Teacher.paymentType,
+      gradeId: Teacher.gradeId
+    })
+    .from(Teacher)
+    .innerJoin(User, eq(Teacher.id, User.id))
+    .where(eq(Teacher.teacherType, "permanent"));
+    const Vacataires = await db.select().from
+(Teacher)
+    .innerJoin(User, eq(Teacher.id, User.id))
+    .where(eq(Teacher.teacherType, "vacataire"));
+    console.log("vacataires", Vacataires);
+    const Outsiders = await db.select().from
+(Teacher)
+    .innerJoin(User, eq(Teacher.id, User.id))
+    .where(eq(Teacher.teacherType, "outsider"));
+
+
+    
+    // Get all grades for pricing
+    const gradesData = await db.select().from(Grade);
+    const gradeMap = {};
+    gradesData.forEach(grade => {
+      gradeMap[grade.id] = {
+        name: grade.GradeName, 
+        price: grade.PricePerHour
+      };
+    });
+    // Process each teacher's data and handle grade changes
+    for (const teacher of Permteachers) {
+      // Get any grade sessions for this teacher during the reporting period
+      const gradeSessions = await db.select()
+        .from(GradeSession)
+        .where(
+          and(
+            eq(GradeSession.teacherId, teacher.id),
+            // Find sessions that overlap with the reporting period
+            or(
+              // Current active session (no end date)
+              isNull(GradeSession.finishDate),
+              // Session ends during or after the reporting period
+              gte(GradeSession.finishDate, formatDateForDB(start))
+            ),
+            // Session starts before or during the reporting period
+            lte(GradeSession.startDate, formatDateForDB(end))
+          )
+        )
+        .orderBy(GradeSession.startDate);      // If no grade sessions found, simply use the teacher's current grade
+        // Store teacher entries for merging by grade
+        for (const session of gradeSessions) {
+          // Calculate the effective period for this grade (for calculation purposes)
+          // This is used for accurate hour calculation but the display will show the full period
+          const effectiveStart = new Date(session.startDate) < start ? start : new Date(session.startDate);
+          const effectiveEnd = !session.finishDate || new Date(session.finishDate) > end ? 
+                              end : new Date(session.finishDate);
+            // Process this grade period if it falls within our reporting range
+          if (effectiveStart <= effectiveEnd) {
+            // We always pass the original report period start date for correct display
+            await processTeacherWithGrade(
+              teacher,
+              session.gradeId,
+              effectiveStart, // For calculations
+              effectiveEnd,   // For calculations
+              gradesData,
+              teachersData,
+              reportPeriod   // Pass the consistent report period for display
+            );
+          }
+        }
+    }
+    // Process each teacher's data and handle grade changes for Vacataires
+    for (const teacher of Vacataires) {
+      console.log("teacher", teacher);
+      // Get any grade sessions for this teacher during the reporting period
+      const gradeSessions = await db.select()
+        .from(GradeSession)
+        .where(
+          and(
+            eq(GradeSession.teacherId, teacher.id),
+            // Find sessions that overlap with the reporting period
+            or(
+              // Current active session (no end date)
+              isNull(GradeSession.finishDate),
+              // Session ends during or after the reporting period
+              gte(GradeSession.finishDate, formatDateForDB(start))
+            ),
+            // Session starts before or during the reporting period
+            lte(GradeSession.startDate, formatDateForDB(end))
+          )
+        )
+        .orderBy(GradeSession.startDate);      // If no grade sessions found, simply use the teacher's current grade
+        // Store teacher entries for merging by grade
+        console.log("gradeSessions vactaire", gradeSessions);
+        for (const session of gradeSessions) {
+          // Calculate the effective period for this grade (for calculation purposes)
+          // This is used for accurate hour calculation but the display will show the full period
+          const effectiveStart = new Date(session.startDate) < start ? start : new Date(session.startDate);
+          const effectiveEnd = !session.finishDate || new Date(session.finishDate) > end ? 
+                              end : new Date(session.finishDate);
+            // Process this grade period if it falls within our reporting range
+          if (effectiveStart <= effectiveEnd) {
+            // We always pass the original report period start date for correct display
+            await processTeacherWithGrade(
+              teacher,
+              session.gradeId,
+              effectiveStart, // For calculations
+              effectiveEnd,   // For calculations
+              gradesData,
+              teachersData,
+              reportPeriod   // Pass the consistent report period for display
+            );
+          }
+        }
+    }
+    // Process each teacher's data and handle grade changes for Outsiders
+    for (const teacher of Outsiders) {
+      // Get any grade sessions for this teacher during the reporting period
+      const gradeSessions = await db.select()
+        .from(GradeSession)
+        .where(
+          and(
+            eq(GradeSession.teacherId, teacher.id),
+            // Find sessions that overlap with the reporting period
+            or(
+              // Current active session (no end date)
+              isNull(GradeSession.finishDate),
+              // Session ends during or after the reporting period
+              gte(GradeSession.finishDate, formatDateForDB(start))
+            ),
+            // Session starts before or during the reporting period
+            lte(GradeSession.startDate, formatDateForDB(end))
+          )
+        )
+        .orderBy(GradeSession.startDate);      // If no grade sessions found, simply use the teacher's current grade
+        // Store teacher entries for merging by grade
+        for (const session of gradeSessions) {
+          // Calculate the effective period for this grade (for calculation purposes)
+          // This is used for accurate hour calculation but the display will show the full period
+          const effectiveStart = new Date(session.startDate) < start ? start : new Date(session.startDate);
+          const effectiveEnd = !session.finishDate || new Date(session.finishDate) > end ? 
+                              end : new Date(session.finishDate);
+            // Process this grade period if it falls within our reporting range
+          if (effectiveStart <= effectiveEnd) {
+            // We always pass the original report period start date for correct display
+            await processTeacherWithGrade(
+              teacher,
+              session.gradeId,
+              effectiveStart, // For calculations
+              effectiveEnd,   // For calculations
+              gradesData,
+              teachersData,
+              reportPeriod   // Pass the consistent report period for display
+            );
+          }
+        }
+    }
+
+    
+    // Sort teachersData by teacher name for consistent output
+    teachersData.sort((a, b) => a.name.localeCompare(b.name));
+
+    // Create Excel workbook
+    const workbook = new ExcelJS.Workbook();
+
+    // Create a worksheet
+    const worksheet = workbook.addWorksheet('Engagement Enseignants');
+
+    // Set page orientation and margins
+    worksheet.pageSetup.orientation = 'landscape';
+    worksheet.pageSetup.margins = {
+      top: 0.5, bottom: 0.5,
+      left: 0.5, right: 0.5,
+      header: 0.3, footer: 0.3
+    };
+
+    const totalColumns = 11; // A à K
+
+    const safeMergeCells = (range) => {
+      try {
+        worksheet.mergeCells(range);
+      } catch (err) {
+      }
+    };    // Helper function for header cells
+    function addHeaderRow(rowNumber, text, fontSize = 12) {
+      safeMergeCells(`A${rowNumber}:K${rowNumber}`);
+      const cell = worksheet.getCell(`A${rowNumber}`);
+      cell.value = text;
+      cell.font = { bold: true, size: fontSize };
+      cell.alignment = { horizontal: 'center' };
+      return cell;
+    }
+    
+    // Add title rows with consistent styling
+    addHeaderRow(1, 'République Algérienne Démocratique et Populaire', 14);
+    addHeaderRow(2, 'Ministère de l\'Enseignement Supérieure et de la Recherche Scientifique');
+    addHeaderRow(3, 'Supérieure en Informatique -08 MAI 1945- Sidi bel Abbes');
+    addHeaderRow(4, 'Secrétariat générale');
+    addHeaderRow(5, 'Service budget, Comptabilité et financement des activités de recherche');// Ligne de titre paiement
+    safeMergeCells(`A7:J7`);
+    const paymentTitleCell = worksheet.getCell('A7');
+    const year = new Date().getFullYear();
+    const displayYear = new Date().getMonth() > 7 ? 
+      `${year}-${year + 1}` : 
+      `${year - 1}-${year}`;
+    
+    paymentTitleCell.value = `Déclaration d'engagement pour les enseignants ${semesterValue}er Semestre ${displayYear}`;
+    paymentTitleCell.font = { bold: true, size: 14 };
+    paymentTitleCell.alignment = { horizontal: 'center' };
+    paymentTitleCell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'E0F0F8' }
+    };
+    paymentTitleCell.border = {
+      top: { style: 'thin' },
+      left: { style: 'thin' },
+      bottom: { style: 'thin' },
+      right: { style: 'thin' }
+    };
+
+    // Date
+    worksheet.getCell('K7').value = new Date().toLocaleDateString('fr-FR');
+    worksheet.getCell('K7').font = { bold: true, size: 12 };
+    worksheet.getCell('K7').alignment = { horizontal: 'right' };
+
+    // Définir les colonnes
+    worksheet.columns = [
+      { header: 'Désignation du bénéficiaire', key: 'name', width: 25 },
+      { header: 'N° de Compte', key: 'accountNumber', width: 20 },
+      { header: 'Grade', key: 'grade', width: 12 },
+      { header: 'Prix unitaire', key: 'hourlyRate', width: 12 },
+      { header: 'Nombre des heures', key: 'hours', width: 15 },
+      { header: 'Montant Total', key: 'totalAmount', width: 15 },
+      { header: 'Période', key: 'period', width: 25 }
+    ];    // Helper function for styling cells
+    function applyCellBorders(cell) {
+      cell.border = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' }
+      };
+    }
+    
+    // Add and style headers in row 9
+    const headers = worksheet.columns.map(col => col.header);
+    worksheet.insertRow(9, headers);
+
+    // Style header row
+    const headerRow = worksheet.getRow(9);
+    headerRow.font = { bold: true, color: { argb: '000000' } };
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFEDA69B' }
+    };
+    headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+    headerRow.eachCell(applyCellBorders);
+
+    // ✅ Geler la ligne d'en-tête
+    worksheet.views = [
+      { state: 'frozen', ySplit: 9 }
+    ];    // Ajouter les lignes de données
+    teachersData.forEach((teacher, index) => {
+      const row = worksheet.addRow({
+        name: teacher.name,
+        accountNumber: teacher.accountNumber,
+        grade: teacher.grade,
+        hourlyRate: teacher.hourlyRate,
+        hours: parseFloat(teacher.hours.toFixed(2)),
+        totalAmount: parseFloat(teacher.totalAmount.toFixed(2)),
+        period: teacher.period
+      });
+
+      row.alignment = { horizontal: 'center', vertical: 'middle' };
+      
+      // Apply alternating row colors for better readability
+      if (index % 2 === 1) {
+        row.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'F2F2F2' }
+        };
+      }
+        row.eachCell((cell, colNumber) => {
+        // Apply common borders
+        applyCellBorders(cell);
+        
+        // Define column types once
+        const MONEY_COLUMNS = [4, 6, 7, 8, 9, 10]; // hourlyRate, totalAmount, etc.
+        const TEXT_LEFT_ALIGN_COLUMNS = [1, 2, 11]; // name, accountNumber, period
+        
+        // Format number cells with currency and decimal precision
+        if (typeof cell.value === 'number') {
+          if (MONEY_COLUMNS.includes(colNumber)) {
+            cell.numFmt = '### ##0.00 "DA"'; // Format with Algerian Dinar
+          } else {
+            cell.numFmt = '#,##0.00'; // Regular number formatting
+          }
+        }
+        
+        // Left align text fields
+        if (TEXT_LEFT_ALIGN_COLUMNS.includes(colNumber)) {
+          cell.alignment = { horizontal: 'left', vertical: 'middle' };
+        }
+      });
+    });
+
+    // Ligne des totaux
+    const totalRow = worksheet.addRow({
+      name: 'TOTAL',
+      accountNumber: '',
+      grade: '',
+      hourlyRate: '',
+      hours: parseFloat(teachersData.reduce((sum, t) => sum + t.hours, 0).toFixed(2)),
+      totalAmount: parseFloat(teachersData.reduce((sum, t) => sum + t.totalAmount, 0).toFixed(2)),
+      period: ''
+    });
+    totalRow.font = { bold: true };
+    totalRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFFCE4D6' }
+    };    totalRow.eachCell((cell) => {
+      applyCellBorders(cell);
+      if (typeof cell.value === 'number') {
+        cell.numFmt = '#,##0.00';
+      }
+    });// Générer le nom de fichier
+    const filename = `Engagment_S${semesterValue}_${displayYear}.xlsx`;
+
+    // En-têtes de la réponse HTTP
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    // Write to response
+    await workbook.xlsx.write(res);
+    res.end();  
+  } catch (error) {
+    console.error('Error generating payment report:', error);
+    return res.status(500).json({ error: 'Internal server error', details: error.message });
+  }
+};

@@ -20,7 +20,6 @@ A comprehensive application for managing additional teaching hours, schedules, g
 
 - **Backend**: Node.js with Express.js
 - **Database**: SQL with Drizzle ORM
-- **Frontend**: Static HTML/CSS/JS served through Express
 
 ## 🛠️ Project Structure
 
@@ -104,9 +103,8 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 👥 Contributors
 
-- [Your Name](https://github.com/yourusername)
-- [Team Member 1](https://github.com/teammember1)
-- [Team Member 2](https://github.com/teammember2)
+- [Mehdi mohamedb amdjad](https://github.com/amdjadmoh)
+- [Chikahoui chihab](https://github.com/Chihab0)
 
 ## 📊 External API Integration
 

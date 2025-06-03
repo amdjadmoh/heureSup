@@ -1,4 +1,4 @@
-import { Schedule, Teacher, Seance, Grade, SeanceTypeCoefficient, Holiday, Absence } from "../db/schema.js";   
+import { Schedule, Teacher, Seance, Grade, SeanceTypeCoefficient, Holiday, Absence ,externalSeances} from "../db/schema.js";   
 import { db } from "../db/index.js";
 import { sql, inArray, eq } from "drizzle-orm";
 
@@ -203,7 +203,10 @@ const CalculatetHeureSup = async (teacherId, startDate, endDate) => {
     }
 
     case "outsider": {
-      const outsiderSeances = teacher[0].externalSeances || [];
+      const outsiderSeances = await db.select()
+        .from(externalSeances)
+        .where(eq(externalSeances.teacherId, teacherId));
+        console.log(outsiderSeances);
       const { calculatedCharge: outsiderCharge, allHeureSupSeances: outsiderHeureSupSeances } =
         await calculateHeureSupForSeances(outsiderSeances, 0, charge, seanceTypeCoefMap);
 

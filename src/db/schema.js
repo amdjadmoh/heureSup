@@ -42,6 +42,21 @@ export const Teacher= pgTable("Teacher",{
   teacherType: TeacherTypeEnum().notNull(),
     accountNumber: varchar("account_number", { length: 50 }).notNull(),
 })
+export const externalSeances = pgTable("ExternalSeances", {
+  module: varchar("module", { length: 100 }).notNull(),
+  group: integer().notNull(),
+   startTime: time("start_time").notNull(),
+  endTime: time("end_time").notNull(),
+  teacherId: integer()
+    .references(() => Teacher.id, { onUpdate: "cascade", onDelete: "cascade" })
+    .notNull(),
+    heureSupDuration: doublePrecision("heure_sup_duration").notNull().default(0.0),
+      day: DayEnum().notNull(),
+        type: SeanceTypeEnum().notNull(),
+
+
+
+})
 
 export const Grade = pgTable("Grade", {
   id: serial().primaryKey(),

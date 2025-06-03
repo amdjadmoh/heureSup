@@ -17,6 +17,7 @@ const teacherRouter = require('./routes/teacher');
 const scheduleRouter = require('./routes/scheduleSeanceSessions');
 const heureSupRouter = require('./routes/heureSup');
 const salaryRouter = require('./routes/salary');
+const externalSeanceRouter = require('./routes/externalSeance');
 
 app.use(cors({
   origin: 'http://localhost:5173', // frontend URL
@@ -39,6 +40,7 @@ app.use('/api/absence', absenceRouter)
 app.use('/api/holiday', holidayRouter);
 app.use('/api/heureSup', heureSupRouter);
 app.use('/api/salary', salaryRouter);
+app.use('/api/external-seance', externalSeanceRouter);
 
 // Special route to manage grade sessions
 app.get('/grade-sessions', (req, res) => {

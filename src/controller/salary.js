@@ -116,6 +116,7 @@ export const generateTeacherPaymentExcel = async (req, res) => {
 
     for (const teacher of teachers) { 
      // Get any grade sessions for this teacher during the reporting period
+     console.log(`Processing teacher: ${teacher} `);
       const gradeSessions = await db.select()
         .from(GradeSession)
         .where(
@@ -133,6 +134,7 @@ export const generateTeacherPaymentExcel = async (req, res) => {
           )
         )
         .orderBy(GradeSession.startDate);      // If no grade sessions found, simply use the teacher's current grade
+        console.log(`Found ${gradeSessions.length} grade sessions for teacher ${teacher.id}`);
         // Store teacher entries for merging by grade
         for (const session of gradeSessions) {
           // Calculate the effective period for this grade (for calculation purposes)
@@ -279,7 +281,9 @@ export const generateTeacherPaymentExcel = async (req, res) => {
         irg: parseFloat(teacher.irg.toFixed(2)),
         debitedAmount: parseFloat(teacher.debitedAmount.toFixed(2)),
         netAmount: parseFloat(teacher.netAmount.toFixed(2)),
-        period: teacher.period
+        period: teacher.period,
+        teacherType: teacher.teacherType
+
       });
 
       row.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -357,7 +361,7 @@ export const generateTeacherPaymentExcel = async (req, res) => {
 };
 
 // Helper function to process a teacher with a specific grade for a specific time period
-async function processTeacherWithGrade(teacher, gradeId, startDate, endDate, gradesData, teachersData) {
+async function processTeacherWithGrade(teacher, gradeId, startDate, endDate, gradesData, teachersData,teacherType) {
   try {
     // Get the hour sup results for this teacher in the specified date range
     const heureSupResult = await CalculatetHeureSup(
@@ -365,7 +369,6 @@ async function processTeacherWithGrade(teacher, gradeId, startDate, endDate, gra
       formatDateForDB(startDate), 
       formatDateForDB(endDate)
     );
-    console.log(`Heure sup result for teacher ${teacher.id}:`, heureSupResult);
     
     // If there are no heure sup seances, skip this teacher
     if (!heureSupResult || !heureSupResult.heureSupSeances || heureSupResult.heureSupSeances.length === 0) return;
@@ -459,7 +462,8 @@ async function processTeacherWithGrade(teacher, gradeId, startDate, endDate, gra
       irg,
       debitedAmount,
       netAmount,
-      period: `du ${formattedStartDate} au ${formattedEndDate}`
+      period: `du ${formattedStartDate} au ${formattedEndDate}`,
+      teacherType
     });
   } catch (error) {
     console.error(`Error processing teacher ${teacher.id} with grade ${gradeId}:`, error);
@@ -478,13 +482,13 @@ export const generateEngagmentExcel = async (req, res) => {
       });
     }
 
- 
     // Parse and validate dates
     const start = new Date(startDate);
     const end = new Date(endDate);
     
-    // Format report period dates for display (used consistently across the report)
+    // Format report period dates for display
     const reportPeriod = `du ${start.toLocaleDateString('fr-FR')} au ${end.toLocaleDateString('fr-FR')}`;
+    
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
       return res.status(400).json({ 
         error: "Invalid date format. Use YYYY-MM-DD" 
@@ -497,10 +501,9 @@ export const generateEngagmentExcel = async (req, res) => {
       });
     }
 
-
     const teachersData = [];
 
-    // Get all  teachers
+    // Get all teachers with proper structure
     const Permteachers = await db.select({
       id: Teacher.id,
       firstName: User.firstName,
@@ -513,18 +516,35 @@ export const generateEngagmentExcel = async (req, res) => {
     .from(Teacher)
     .innerJoin(User, eq(Teacher.id, User.id))
     .where(eq(Teacher.teacherType, "permanent"));
-    const Vacataires = await db.select().from
-(Teacher)
+
+    // Fix Vacataire query
+    const Vacataires = await db.select({
+      id: Teacher.id,
+      firstName: User.firstName,
+      lastName: User.lastName,
+      accountNumber: Teacher.accountNumber,
+      teacherType: Teacher.teacherType,
+      paymentType: Teacher.paymentType,
+      gradeId: Teacher.gradeId
+    })
+    .from(Teacher)
     .innerJoin(User, eq(Teacher.id, User.id))
     .where(eq(Teacher.teacherType, "vacataire"));
-    console.log("vacataires", Vacataires);
-    const Outsiders = await db.select().from
-(Teacher)
+
+    // Fix Outsider query
+    const Outsiders = await db.select({
+      id: Teacher.id,
+      firstName: User.firstName,
+      lastName: User.lastName,
+      accountNumber: Teacher.accountNumber,
+      teacherType: Teacher.teacherType,
+      paymentType: Teacher.paymentType,
+      gradeId: Teacher.gradeId
+    })
+    .from(Teacher)
     .innerJoin(User, eq(Teacher.id, User.id))
     .where(eq(Teacher.teacherType, "outsider"));
 
-
-    
     // Get all grades for pricing
     const gradesData = await db.select().from(Grade);
     const gradeMap = {};
@@ -534,138 +554,71 @@ export const generateEngagmentExcel = async (req, res) => {
         price: grade.PricePerHour
       };
     });
-    // Process each teacher's data and handle grade changes
-    for (const teacher of Permteachers) {
+
+    // Process each teacher type
+    const allTeachers = [...Permteachers, ...Vacataires, ...Outsiders];
+    
+    for (const teacher of allTeachers) {
+      console.log(`Processing ${teacher.teacherType} teacher: ${teacher.firstName} ${teacher.lastName} (ID: ${teacher.id})`);
+      
       // Get any grade sessions for this teacher during the reporting period
       const gradeSessions = await db.select()
         .from(GradeSession)
         .where(
           and(
             eq(GradeSession.teacherId, teacher.id),
-            // Find sessions that overlap with the reporting period
             or(
-              // Current active session (no end date)
               isNull(GradeSession.finishDate),
-              // Session ends during or after the reporting period
               gte(GradeSession.finishDate, formatDateForDB(start))
             ),
-            // Session starts before or during the reporting period
             lte(GradeSession.startDate, formatDateForDB(end))
           )
         )
-        .orderBy(GradeSession.startDate);      // If no grade sessions found, simply use the teacher's current grade
-        // Store teacher entries for merging by grade
+        .orderBy(GradeSession.startDate);
+      
+      console.log(`Found ${gradeSessions.length} grade sessions for ${teacher.teacherType} teacher ${teacher.id}`);
+      
+      if (gradeSessions.length === 0) {
+        // If no grade sessions, use the teacher's current grade
+        const effectiveStart = start;
+        const effectiveEnd = end;
+        
+        await processTeacherWithGrade(
+          teacher,
+          teacher.gradeId,
+          effectiveStart,
+          effectiveEnd,
+          gradesData,
+          teachersData,
+          reportPeriod,
+        );
+      } else {
+        // Process each grade session
         for (const session of gradeSessions) {
-          // Calculate the effective period for this grade (for calculation purposes)
-          // This is used for accurate hour calculation but the display will show the full period
           const effectiveStart = new Date(session.startDate) < start ? start : new Date(session.startDate);
           const effectiveEnd = !session.finishDate || new Date(session.finishDate) > end ? 
                               end : new Date(session.finishDate);
-            // Process this grade period if it falls within our reporting range
+          
           if (effectiveStart <= effectiveEnd) {
-            // We always pass the original report period start date for correct display
             await processTeacherWithGrade(
               teacher,
               session.gradeId,
-              effectiveStart, // For calculations
-              effectiveEnd,   // For calculations
+              effectiveStart,
+              effectiveEnd,
               gradesData,
               teachersData,
-              reportPeriod   // Pass the consistent report period for display
+              reportPeriod
             );
           }
         }
-    }
-    // Process each teacher's data and handle grade changes for Vacataires
-    for (const teacher of Vacataires) {
-     
-      // Get any grade sessions for this teacher during the reporting period[]
-      const gradeSessions = await db.select()
-        .from(GradeSession)
-        .where(
-          and(
-            eq(GradeSession.teacherId, teacher.id),
-            // Find sessions that overlap with the reporting period
-            or(
-              // Current active session (no end date)
-              isNull(GradeSession.finishDate),
-              // Session ends during or after the reporting period
-              gte(GradeSession.finishDate, formatDateForDB(start))
-            ),
-            // Session starts before or during the reporting period
-            lte(GradeSession.startDate, formatDateForDB(end))
-          )
-        )
-        .orderBy(GradeSession.startDate);      // If no grade sessions found, simply use the teacher's current grade
-        // Store teacher entries for merging by grade
-        console.log("gradeSessions", gradeSessions);  
-        for (const session of gradeSessions) {
-          // Calculate the effective period for this grade (for calculation purposes)
-          // This is used for accurate hour calculation but the display will show the full period
-          const effectiveStart = new Date(session.startDate) < start ? start : new Date(session.startDate);
-          const effectiveEnd = !session.finishDate || new Date(session.finishDate) > end ? 
-                              end : new Date(session.finishDate);
-            // Process this grade period if it falls within our reporting range
-          if (effectiveStart <= effectiveEnd) {
-            // We always pass the original report period start date for correct display
-            await processTeacherWithGrade(
-              teacher,
-              session.gradeId,
-              effectiveStart, // For calculations
-              effectiveEnd,   // For calculations
-              gradesData,
-              teachersData,
-              reportPeriod   // Pass the consistent report period for display
-            );
-          }
-        }
-    }
-    // Process each teacher's data and handle grade changes for Outsiders
-    for (const teacher of Outsiders) {
-      // Get any grade sessions for this teacher during the reporting period
-      const gradeSessions = await db.select()
-        .from(GradeSession)
-        .where(
-          and(
-            eq(GradeSession.teacherId, teacher.id),
-            // Find sessions that overlap with the reporting period
-            or(
-              // Current active session (no end date)
-              isNull(GradeSession.finishDate),
-              // Session ends during or after the reporting period
-              gte(GradeSession.finishDate, formatDateForDB(start))
-            ),
-            // Session starts before or during the reporting period
-            lte(GradeSession.startDate, formatDateForDB(end))
-          )
-        )
-        .orderBy(GradeSession.startDate);      // If no grade sessions found, simply use the teacher's current grade
-        // Store teacher entries for merging by grade
-        for (const session of gradeSessions) {
-          // Calculate the effective period for this grade (for calculation purposes)
-          // This is used for accurate hour calculation but the display will show the full period
-          const effectiveStart = new Date(session.startDate) < start ? start : new Date(session.startDate);
-          const effectiveEnd = !session.finishDate || new Date(session.finishDate) > end ? 
-                              end : new Date(session.finishDate);
-            // Process this grade period if it falls within our reporting range
-          if (effectiveStart <= effectiveEnd) {
-            // We always pass the original report period start date for correct display
-            await processTeacherWithGrade(
-              teacher,
-              session.gradeId,
-              effectiveStart, // For calculations
-              effectiveEnd,   // For calculations
-              gradesData,
-              teachersData,
-              reportPeriod   // Pass the consistent report period for display
-            );
-          }
-        }
+      }
     }
 
-    
+    // Rest of your Excel generation code remains the same...
     // Sort teachersData by teacher name for consistent output
     teachersData.sort((a, b) => a.name.localeCompare(b.name));
+
+    // Create Excel workbook and continue with your existing code...
 
     // Create Excel workbook
     const workbook = new ExcelJS.Workbook();
@@ -739,7 +692,7 @@ export const generateEngagmentExcel = async (req, res) => {
       { header: 'Prix unitaire', key: 'hourlyRate', width: 12 },
       { header: 'Nombre des heures', key: 'hours', width: 15 },
       { header: 'Montant Total', key: 'totalAmount', width: 15 },
-      { header: 'Période', key: 'period', width: 25 }
+      { header: 'Période', key: 'period', width: 25 },
     ];    // Helper function for styling cells
     function applyCellBorders(cell) {
       cell.border = {
@@ -777,7 +730,7 @@ export const generateEngagmentExcel = async (req, res) => {
         hourlyRate: teacher.hourlyRate,
         hours: parseFloat(teacher.hours.toFixed(2)),
         totalAmount: parseFloat(teacher.totalAmount.toFixed(2)),
-        period: teacher.period
+        period: teacher.period,
       });
 
       row.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -822,7 +775,7 @@ export const generateEngagmentExcel = async (req, res) => {
       hourlyRate: '',
       hours: parseFloat(teachersData.reduce((sum, t) => sum + t.hours, 0).toFixed(2)),
       totalAmount: parseFloat(teachersData.reduce((sum, t) => sum + t.totalAmount, 0).toFixed(2)),
-      period: ''
+      period: '',
     });
     totalRow.font = { bold: true };
     totalRow.fill = {
